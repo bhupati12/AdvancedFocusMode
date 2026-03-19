@@ -1,17 +1,26 @@
 import {
+  buildSessionReplay,
+  buildSessionReport,
   calculateFocusScore,
   calculateRemainingSeconds,
   deriveStatusLabel,
   addHistoryEntry,
   createBlock,
+  createBudgetRule,
   createDefaultState,
+  createParkingItem,
   createTask,
+  deriveAutopilot,
   deriveAdaptivePlan,
   formatDuration,
   formatMinutes,
   formatRelativeTimestamp,
+  getDisplayedSessionSeconds,
+  projectModeCatalog,
   normalizeHost,
+  deriveSmartBlockSuggestions,
   normalizeState,
+  summarizeFocusBudgets,
   summarizeSession,
   todayStamp
 } from "./shared.js";
@@ -60,6 +69,34 @@ const els = {
   shieldList: document.getElementById("shield-list"),
   shieldSuggestions: document.getElementById("shield-suggestions"),
   addSuggestedTask: document.getElementById("add-suggested-task"),
+  captureContext: document.getElementById("capture-context"),
+  restoreContext: document.getElementById("restore-context"),
+  recoveryStatus: document.getElementById("recovery-status"),
+  recoveryList: document.getElementById("recovery-list"),
+  autopilotLevel: document.getElementById("autopilot-level"),
+  autopilotConfidence: document.getElementById("autopilot-confidence"),
+  autopilotRationale: document.getElementById("autopilot-rationale"),
+  autopilotMode: document.getElementById("autopilot-mode"),
+  autopilotBlocking: document.getElementById("autopilot-blocking"),
+  applyAutopilot: document.getElementById("apply-autopilot"),
+  modeGrid: document.getElementById("mode-grid"),
+  budgetStatus: document.getElementById("budget-status"),
+  budgetForm: document.getElementById("budget-form"),
+  budgetHost: document.getElementById("budget-host"),
+  budgetLabel: document.getElementById("budget-label"),
+  budgetLimit: document.getElementById("budget-limit"),
+  budgetList: document.getElementById("budget-list"),
+  resetBudgets: document.getElementById("reset-budgets"),
+  clearForensics: document.getElementById("clear-forensics"),
+  forensicsBlocked: document.getElementById("forensics-blocked"),
+  forensicsSwitches: document.getElementById("forensics-switches"),
+  forensicsEscapes: document.getElementById("forensics-escapes"),
+  smartBlockCount: document.getElementById("smart-block-count"),
+  replayList: document.getElementById("replay-list"),
+  parkingForm: document.getElementById("parking-form"),
+  parkingInput: document.getElementById("parking-input"),
+  parkingList: document.getElementById("parking-list"),
+  clearParking: document.getElementById("clear-parking"),
   notes: document.getElementById("session-notes"),
   activityList: document.getElementById("activity-list"),
   metricDeepWork: document.getElementById("metric-deep-work"),
@@ -77,6 +114,8 @@ const els = {
   reviewObjective: document.getElementById("review-objective"),
   reviewTopTasks: document.getElementById("review-top-tasks"),
   reviewNextAction: document.getElementById("review-next-action"),
+  copyReport: document.getElementById("copy-report"),
+  downloadReport: document.getElementById("download-report"),
   paletteBackdrop: document.getElementById("palette-backdrop"),
   paletteInput: document.getElementById("palette-input"),
   paletteList: document.getElementById("palette-list"),
@@ -91,6 +130,9 @@ const paletteActions = [
   { title: "Finish session", hint: "Close the active focus block.", action: "complete-session" },
   { title: "Skip break", hint: "End the active break and return to idle.", action: "skip-break" },
   { title: "Reset session", hint: "Clear the current timer and state.", action: "reset-session" },
+  { title: "Capture context", hint: "Save the current work tabs for exact restore.", action: "capture-context" },
+  { title: "Restore context", hint: "Reopen saved tabs from the last snapshot.", action: "restore-context" },
+  { title: "Apply autopilot", hint: "Let the extension pick the best mode.", action: "apply-autopilot" },
   { title: "Open settings", hint: "Manage backups, shortcuts, and resets.", action: "open-options" },
   { title: "Export backup", hint: "Download the current focus state.", action: "export-state" },
   { title: "Open clean tab", hint: "Launch a blank tab for distraction-free work.", action: "open-clean-tab" }
@@ -101,7 +143,7 @@ await init();
 async function init() {
   wireEvents();
   await refresh();
-  chrome.storage?.onChanged?.addListener?.(handleStorageChange);
+  globalThis.chrome?.storage?.onChanged?.addListener?.(handleStorageChange);
   window.setInterval(() => {
     renderTimer();
     updateDocumentTitle();
@@ -122,6 +164,16 @@ function wireEvents() {
   on(els.projectName, "input", queueProjectSave);
   on(els.projectBranch, "input", queueProjectSave);
   on(els.projectTicket, "input", queueProjectSave);
+  on(els.copyReport, "click", copyReport);
+  on(els.downloadReport, "click", downloadReport);
+  on(els.captureContext, "click", captureContext);
+  on(els.restoreContext, "click", restoreContext);
+  on(els.applyAutopilot, "click", applyAutopilot);
+  on(els.budgetForm, "submit", onBudgetSubmit);
+  on(els.resetBudgets, "click", resetBudgets);
+  on(els.clearForensics, "click", clearForensics);
+  on(els.parkingForm, "submit", onParkingSubmit);
+  on(els.clearParking, "click", clearParkingLot);
   on(els.paletteBackdrop, "click", handlePaletteBackdropClick);
   on(els.paletteInput, "input", handlePaletteInput);
   on(els.paletteInput, "keydown", handlePaletteKeydown);
@@ -147,6 +199,34 @@ async function handleClick(event) {
     const blockButton = event.target.closest("[data-block-action]");
     if (blockButton) {
       await handleBlockAction(blockButton.dataset.blockAction, blockButton.dataset.blockId);
+      return;
+    }
+
+    const modeButton = event.target.closest("[data-mode-action]");
+    if (modeButton) {
+      await handleModeAction(modeButton.dataset.modeAction, modeButton.dataset.modeId);
+      return;
+    }
+
+    const budgetButton = event.target.closest("[data-budget-action]");
+    if (budgetButton) {
+      await handleBudgetAction(budgetButton.dataset.budgetAction, budgetButton.dataset.budgetId);
+      return;
+    }
+
+    const taskContextButton = event.target.closest("[data-task-context-action]");
+    if (taskContextButton) {
+      await handleTaskContextAction(
+        taskContextButton.dataset.taskContextAction,
+        taskContextButton.dataset.taskId,
+        taskContextButton.dataset.contextUrl
+      );
+      return;
+    }
+
+    const parkingButton = event.target.closest("[data-parking-action]");
+    if (parkingButton) {
+      await handleParkingAction(parkingButton.dataset.parkingAction, parkingButton.dataset.parkingId, parkingButton.dataset.parkingUrl);
       return;
     }
 
@@ -176,8 +256,23 @@ async function handleAction(action) {
     case "reset-session":
       await withStatus("Resetting session...", () => command("session:reset"));
       break;
+    case "capture-context":
+      await withStatus("Capturing context...", () => command("session:capture-context"));
+      break;
+    case "restore-context":
+      await withStatus("Restoring context...", () => command("session:restore-context"));
+      break;
+    case "apply-autopilot":
+      await withStatus("Applying autopilot...", () => command("session:autopilot-apply"));
+      break;
     case "copy-summary":
       await withStatus("Summary copied to clipboard.", () => copySummary());
+      break;
+    case "copy-report":
+      await withStatus("Report copied to clipboard.", () => copyReport());
+      break;
+    case "download-report":
+      await withStatus("Report downloaded.", () => downloadReport());
       break;
     case "export-state":
       await withStatus("Exported backup.", () => exportState());
@@ -186,7 +281,11 @@ async function handleAction(action) {
       await withStatus("Opening clean tab...", () => command("tab:open-clean"));
       break;
     case "open-options":
-      await withStatus("Opening settings...", () => chrome.runtime.openOptionsPage());
+      if (extensionBridgeAvailable && globalThis.chrome?.runtime?.openOptionsPage) {
+        await withStatus("Opening settings...", () => chrome.runtime.openOptionsPage());
+      } else {
+        setActionStatus("Settings are available in the extension.");
+      }
       break;
     case "open-palette":
       openPalette();
@@ -239,6 +338,52 @@ async function onShieldSubmit(event) {
   if (!host) return;
   await command("block:add", { host });
   els.shieldInput.value = "";
+}
+
+async function onParkingSubmit(event) {
+  event.preventDefault();
+  const note = els.parkingInput.value.trim();
+  if (!note) return;
+  await command("parking:add", { title: note, note });
+  els.parkingInput.value = "";
+}
+
+async function onBudgetSubmit(event) {
+  event.preventDefault();
+  const host = els.budgetHost.value.trim();
+  if (!host) return;
+  await command("budget:add", {
+    host,
+    label: els.budgetLabel.value.trim() || host,
+    dailyLimit: Number(els.budgetLimit.value || 5)
+  });
+  els.budgetHost.value = "";
+  els.budgetLabel.value = "";
+  els.budgetLimit.value = "5";
+}
+
+async function captureContext() {
+  await command("session:capture-context", { source: "dashboard" });
+}
+
+async function restoreContext() {
+  await command("session:restore-context");
+}
+
+async function applyAutopilot() {
+  await command("session:autopilot-apply");
+}
+
+async function resetBudgets() {
+  await command("budget:reset");
+}
+
+async function clearForensics() {
+  await command("forensics:clear");
+}
+
+async function clearParkingLot() {
+  await command("parking:clear");
 }
 
 function addSuggestedTask() {
@@ -307,10 +452,10 @@ async function command(type, payload = {}) {
   }
 
   const result = await localCommand(type, payload);
-  state.snapshot = result;
-  persistLocalState(result);
+  state.snapshot = decorateSnapshot(result);
+  persistLocalState(state.snapshot);
   render();
-  return result;
+  return state.snapshot;
 }
 
 async function withStatus(message, run) {
@@ -350,10 +495,16 @@ function render() {
 
   renderMetrics(snapshot);
   renderSession(snapshot);
+  renderRecovery(snapshot);
+  renderAutopilot(snapshot);
+  renderModes(snapshot);
+  renderBudgets(snapshot);
   renderCoach(snapshot);
   renderReview(snapshot);
   renderTasks(snapshot.tasks || []);
   renderBlocks(snapshot.blocks || []);
+  renderParking(snapshot.parkingLot || []);
+  renderReplay(snapshot);
   renderActivity(snapshot.history || []);
   renderSuggestedBlocks();
   renderSessionPreview();
@@ -382,7 +533,7 @@ function renderSession(snapshot) {
   const session = snapshot.session;
   els.sessionStatus.textContent = deriveStatusLabel(session);
   els.objectivePreview.textContent = session.objective?.trim() ? session.objective.trim() : "Nothing set yet";
-  els.modePreview.textContent = prettyMode(session.mode || "deep-work");
+  els.modePreview.textContent = session.modeLabel || prettyMode(session.mode || "deep-work");
   els.breakPreview.textContent = `${formatMinutes(session.breakMinutes || 10)} break`;
   els.togglePause.textContent = session.phase === "paused" ? "Resume" : "Pause";
   els.completeSession.textContent = session.phase === "break" ? "End break" : "Finish round";
@@ -397,6 +548,150 @@ function renderSession(snapshot) {
   } else {
     els.timerDetail.textContent = "Set the mission, start the timer, and protect the session.";
   }
+}
+
+function renderRecovery(snapshot) {
+  if (!els.recoveryStatus || !els.recoveryList) {
+    return;
+  }
+
+  const recovery = snapshot.session?.recovery ?? {};
+  const tabs = Array.isArray(recovery.tabs) ? recovery.tabs : [];
+  els.recoveryStatus.textContent = tabs.length ? `${tabs.length} tab(s) saved` : "No context saved";
+  els.recoveryList.innerHTML = tabs.length
+    ? tabs
+        .slice(0, 6)
+        .map(
+          (tab) => `
+            <li class="activity-item">
+              <div class="activity-item-head">
+                <div>
+                  <strong>${escapeHtml(tab.title || tab.url || "Untitled tab")}</strong>
+                  <small>${escapeHtml(tab.url || "No URL captured")}</small>
+                </div>
+              </div>
+            </li>
+          `
+        )
+        .join("")
+    : emptyState("Nothing captured yet", "Use Capture context while your work tabs are open.");
+
+  const lastSaved = recovery.capturedAt ? formatRelativeTimestamp(recovery.capturedAt) : "Not yet captured";
+  const source = recovery.source ? `Saved from ${recovery.source}` : "Capture a session context to enable one-click restore.";
+  els.recoveryStatus.title = `${lastSaved}. ${source}`;
+}
+
+function renderAutopilot(snapshot) {
+  if (!els.autopilotLevel) return;
+  const autopilot = snapshot.autopilot ?? deriveAutopilot(snapshot);
+  els.autopilotLevel.textContent = prettyLabel(autopilot.level || "balanced");
+  if (els.autopilotConfidence) {
+    els.autopilotConfidence.textContent = `${autopilot.confidence ?? 0}% confidence`;
+  }
+  if (els.autopilotRationale) {
+    els.autopilotRationale.textContent = autopilot.rationale || "Autopilot will adapt once the session has enough signal.";
+  }
+  if (els.autopilotMode) {
+    els.autopilotMode.textContent = snapshot.projectModes?.find((mode) => mode.id === autopilot.recommendedModeId)?.label || autopilot.recommendedModeLabel || "Balanced";
+  }
+  if (els.autopilotBlocking) {
+    els.autopilotBlocking.textContent = autopilot.suggestedStrictBlocking ? "On" : "Off";
+  }
+}
+
+function renderModes(snapshot) {
+  if (!els.modeGrid) return;
+  const modes = snapshot.projectModes || [];
+  els.modeGrid.innerHTML = modes
+    .map(
+      (mode) => `
+        <button class="preset-card ${snapshot.session?.modeId === mode.id ? "active" : ""}" data-mode-action="apply" data-mode-id="${mode.id}" type="button">
+          <span>${escapeHtml(mode.label)}</span>
+          <small>${escapeHtml(mode.focusMinutes)}m focus, ${escapeHtml(mode.breakMinutes)}m break. ${escapeHtml(mode.ritual)}</small>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderBudgets(snapshot) {
+  if (!els.budgetList) return;
+  const budgets = snapshot.budgetSummary || summarizeFocusBudgets(snapshot);
+  if (els.budgetStatus) {
+    els.budgetStatus.textContent = budgets.length ? `${budgets.length} budget(s)` : "Ready";
+  }
+  els.budgetList.innerHTML = budgets.length
+    ? budgets
+        .map(
+          (budget) => `
+            <article class="block-item ${budget.remaining <= 0 ? "disabled" : ""}">
+              <div class="task-copy">
+                <span class="block-host">${escapeHtml(budget.label)}</span>
+                <small>${escapeHtml(budget.host)} · ${budget.used}/${budget.dailyLimit} checks used</small>
+              </div>
+              <div class="block-actions">
+                <button class="secondary-button" data-budget-action="remove" data-budget-id="${budget.id}" type="button">Remove</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    : emptyState("No focus budgets", "Add a host and a daily allowance to track distraction pressure.");
+}
+
+function renderReplay(snapshot) {
+  if (!els.replayList) return;
+  const replay = snapshot.replay || buildSessionReplay(snapshot);
+  if (els.forensicsBlocked) els.forensicsBlocked.textContent = String(snapshot.forensics?.blockedAttempts ?? 0);
+  if (els.forensicsSwitches) els.forensicsSwitches.textContent = String(snapshot.forensics?.tabSwitches ?? 0);
+  if (els.forensicsEscapes) els.forensicsEscapes.textContent = String(snapshot.forensics?.focusEscapes ?? 0);
+  if (els.smartBlockCount) els.smartBlockCount.textContent = String((snapshot.smartBlockSuggestions || []).length);
+
+  els.replayList.innerHTML = replay.length
+    ? replay
+        .map(
+          (entry) => `
+            <li class="activity-item">
+              <div class="activity-item-head">
+                <div>
+                  <strong>${escapeHtml(entry.title)}</strong>
+                  <small>${escapeHtml(entry.detail || "")}</small>
+                </div>
+                <small>${formatRelativeTimestamp(entry.createdAt)}</small>
+              </div>
+            </li>
+          `
+        )
+        .join("")
+    : emptyState("No replay yet", "As the session runs, interruptions and recoveries will appear here.");
+}
+
+function renderParking(parkingLot) {
+  if (!els.parkingList) {
+    return;
+  }
+
+  if (!parkingLot.length) {
+    els.parkingList.innerHTML = emptyState("Parking lot empty", "Capture side thoughts, links, and distractions here.");
+    return;
+  }
+
+  els.parkingList.innerHTML = parkingLot
+    .map(
+      (item) => `
+        <article class="task-item ${item.kind === "tab" ? "parked-tab" : ""}">
+          <div class="task-copy">
+            <span class="task-title">${escapeHtml(item.title)}</span>
+            <small>${escapeHtml(item.note || item.url || "No extra note")} · ${formatRelativeTimestamp(item.createdAt)}</small>
+          </div>
+          <div class="task-actions">
+            ${item.url ? `<button class="secondary-button" data-parking-action="open" data-parking-url="${escapeHtml(item.url)}" type="button">Open</button>` : ""}
+            <button class="ghost-button" data-parking-action="remove" data-parking-id="${item.id}" type="button">Remove</button>
+          </div>
+        </article>
+      `
+    )
+    .join("");
 }
 
 function renderSessionPreview() {
@@ -427,7 +722,7 @@ function renderTimer() {
   const session = state.snapshot.session;
   const isBreak = session.phase === "break";
   const totalSeconds = Math.max(1, Number((isBreak ? session.breakMinutes : session.focusMinutes) || 1) * 60);
-  const remainingSeconds = calculateRemainingSeconds(session);
+  const remainingSeconds = getDisplayedSessionSeconds(session);
   const progress = session.active ? Math.max(0, Math.min(100, ((totalSeconds - remainingSeconds) / totalSeconds) * 100)) : 0;
 
   els.timerRing.style.setProperty("--progress", `${progress}%`);
@@ -448,8 +743,21 @@ function renderTasks(tasks) {
           <div class="task-copy">
             <span class="task-title">${escapeHtml(task.title)}</span>
             <small>${task.done ? "Completed" : "Pending"} · ${formatRelativeTimestamp(task.createdAt)}</small>
+            ${
+              Array.isArray(task.contextLinks) && task.contextLinks.length
+                ? `<div class="chip-row">${task.contextLinks
+                    .map(
+                      (link) =>
+                        `<button class="chip" data-task-context-action="open" data-task-id="${task.id}" data-context-url="${escapeHtml(link.url)}" type="button">${escapeHtml(link.title)}</button>`
+                    )
+                    .join("")}</div>`
+                : ""
+            }
           </div>
           <div class="task-actions">
+            <button class="secondary-button" data-task-context-action="link-current" data-task-id="${task.id}" type="button">
+              Link tab
+            </button>
             <button class="secondary-button" data-task-action="toggle" data-task-id="${task.id}" type="button">
               ${task.done ? "Reopen" : "Done"}
             </button>
@@ -489,7 +797,8 @@ function renderBlocks(blocks) {
 
 function renderSuggestedBlocks() {
   const current = new Set((state.snapshot?.blocks || []).map((block) => block.host));
-  const items = suggestions.filter((item) => !current.has(normalizeHost(item)));
+  const smart = state.snapshot?.smartBlockSuggestions || [];
+  const items = [...new Set([...smart, ...suggestions])].filter((item) => !current.has(normalizeHost(item)));
   els.shieldSuggestions.innerHTML = items
     .slice(0, 6)
     .map((host) => `<button class="chip" data-suggested-host="${host}" type="button">${escapeHtml(host)}</button>`)
@@ -536,9 +845,48 @@ async function handleBlockAction(action, blockId) {
   }
 }
 
+async function handleParkingAction(action, parkingId, parkingUrl) {
+  if (action === "remove") {
+    await command("parking:remove", { id: parkingId });
+  } else if (action === "open" && parkingUrl) {
+    if (extensionBridgeAvailable && globalThis.chrome?.tabs?.create) {
+      await chrome.tabs.create({ url: parkingUrl, active: true });
+    } else {
+      window.open(parkingUrl, "_blank", "noopener,noreferrer");
+    }
+  }
+}
+
+async function handleModeAction(action, modeId) {
+  if (action === "apply" && modeId) {
+    await command("session:apply-mode", { modeId });
+  }
+}
+
+async function handleBudgetAction(action, budgetId) {
+  if (action === "remove") {
+    await command("budget:remove", { id: budgetId });
+  }
+}
+
+async function handleTaskContextAction(action, taskId, contextUrl) {
+  if (action === "link-current") {
+    await command("task:link-context", { taskId });
+  } else if (action === "open" && contextUrl) {
+    if (extensionBridgeAvailable && globalThis.chrome?.tabs?.create) {
+      await chrome.tabs.create({ url: contextUrl, active: true });
+    } else {
+      window.open(contextUrl, "_blank", "noopener,noreferrer");
+    }
+  } else if (action === "unlink" && contextUrl) {
+    await command("task:unlink-context", { taskId, url: contextUrl });
+  }
+}
+
 function sessionPayload() {
   return {
     mode: els.sessionMode.value,
+    modeId: modeIdForSessionMode(els.sessionMode.value),
     focusMinutes: Number(els.focusMinutes.value),
     breakMinutes: Number(els.breakMinutes.value),
     objective: els.sessionObjective.value,
@@ -556,13 +904,31 @@ async function copySummary() {
     `Mode: ${prettyMode(session.mode)}`,
     `Objective: ${session.objective || "None set"}`,
     `Status: ${deriveStatusLabel(session)}`,
-    `Remaining: ${formatDuration(calculateRemainingSeconds(session) || 0)}`,
+    `Remaining: ${formatDuration(getDisplayedSessionSeconds(session) || 0)}`,
     `Tasks done: ${state.snapshot.tasks.filter((task) => task.done).length}/${state.snapshot.tasks.length}`,
     `Shielded sites: ${state.snapshot.blocks.filter((block) => block.enabled !== false).length}`,
     `Focus score: ${calculateFocusScore(state.snapshot)}`
   ].join("\n");
 
   await navigator.clipboard.writeText(summary);
+}
+
+async function copyReport() {
+  if (!state.snapshot) return;
+  const report = buildSessionReport(state.snapshot);
+  await navigator.clipboard.writeText(report.markdown);
+}
+
+async function downloadReport() {
+  if (!state.snapshot || !extensionBridgeAvailable) return;
+  const report = buildSessionReport(state.snapshot);
+  const blob = new Blob([report.markdown], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = report.filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 async function exportState() {
@@ -685,18 +1051,56 @@ async function localCommand(type, payload) {
       return localSkipBreak(snapshot);
     case "session:reset":
       return localResetSession(snapshot);
+    case "session:apply-mode":
+      return localApplyMode(snapshot, payload?.modeId);
+    case "session:autopilot-apply":
+      return localApplyMode(snapshot, autopilotModeId(snapshot));
     case "task:add":
       return localAddTask(snapshot, payload?.title);
     case "task:toggle":
       return localToggleTask(snapshot, payload?.id);
     case "task:remove":
       return localRemoveTask(snapshot, payload?.id);
+    case "task:link-context":
+      return localLinkTaskContext(snapshot, payload?.taskId, payload);
+    case "task:unlink-context":
+      return localUnlinkTaskContext(snapshot, payload?.taskId, payload?.url);
+    case "task:open-context":
+      return snapshot;
     case "block:add":
       return localAddBlock(snapshot, payload?.host);
     case "block:toggle":
       return localToggleBlock(snapshot, payload?.id);
     case "block:remove":
       return localRemoveBlock(snapshot, payload?.id);
+    case "budget:add":
+      return localAddBudget(snapshot, payload);
+    case "budget:update":
+      return localUpdateBudget(snapshot, payload?.id, payload);
+    case "budget:remove":
+      return localRemoveBudget(snapshot, payload?.id);
+    case "budget:reset":
+      return localResetBudgets(snapshot);
+    case "forensics:clear":
+      return localClearForensics(snapshot);
+    case "session:capture-context":
+      snapshot.session.recovery = localCaptureContext(payload?.source);
+      return snapshot;
+    case "session:restore-context":
+      return snapshot;
+    case "parking:add":
+      snapshot.parkingLot.unshift(createParkingItem(payload));
+      return snapshot;
+    case "parking:remove":
+      snapshot.parkingLot = snapshot.parkingLot.filter((item) => item.id !== payload?.id);
+      return snapshot;
+    case "parking:clear":
+      snapshot.parkingLot = [];
+      return snapshot;
+    case "interruption:blocked-attempt":
+      return localRecordBlockedAttempt(snapshot, payload);
+    case "interruption:tab-switch":
+      return localRecordTabSwitch(snapshot, payload);
     case "notes:update":
       snapshot.notes = String(payload?.notes ?? "");
       return snapshot;
@@ -720,6 +1124,18 @@ async function localCommand(type, payload) {
   }
 }
 
+function decorateSnapshot(snapshot) {
+  const value = normalizeState(snapshot ?? createDefaultState());
+  value.insights = deriveAdaptivePlan(value);
+  value.autopilot = deriveAutopilot(value);
+  value.projectModes = value.projectModes && value.projectModes.length ? value.projectModes : projectModeCatalog();
+  value.replay = buildSessionReplay(value);
+  value.smartBlockSuggestions = deriveSmartBlockSuggestions(value);
+  value.budgetSummary = summarizeFocusBudgets(value);
+  value.sessionSummary = summarizeSession(value);
+  return value;
+}
+
 function loadLocalState() {
   try {
     const raw = localStorage.getItem(localStateKey);
@@ -739,6 +1155,8 @@ function persistLocalState(snapshot) {
 
 function localStartSession(snapshot, payload) {
   const mode = String(payload?.mode ?? snapshot.session.mode ?? "deep-work");
+  const modeId = String(payload?.modeId ?? modeIdForSessionMode(mode));
+  const modeLabel = prettyLabel(modeId);
   const focusMinutes = clampNumber(payload?.focusMinutes ?? snapshot.session.focusMinutes ?? 50, 15, 240);
   const breakMinutes = clampNumber(payload?.breakMinutes ?? snapshot.session.breakMinutes ?? 10, 5, 60);
   const objective = String(payload?.objective ?? snapshot.session.objective ?? "").trim().slice(0, 180);
@@ -751,6 +1169,8 @@ function localStartSession(snapshot, payload) {
     phase: "focus",
     pausedPhase: null,
     mode,
+    modeId,
+    modeLabel,
     projectName,
     projectBranch,
     projectTicket,
@@ -761,13 +1181,15 @@ function localStartSession(snapshot, payload) {
     endsAt: new Date(Date.now() + focusMinutes * 60_000).toISOString(),
     pausedAt: null,
     remainingSeconds: focusMinutes * 60,
-    pauseCount: 0
+    pauseCount: 0,
+    recovery: snapshot.session.recovery,
+    lastObservedTab: snapshot.session.lastObservedTab
   };
 
   addHistoryEntry(snapshot, {
     type: "session-started",
     title: "Focus session started",
-    detail: `${mode} for ${focusMinutes}m. Break: ${breakMinutes}m.`
+    detail: `${modeLabel} for ${focusMinutes}m. Break: ${breakMinutes}m.`
   });
 
   return snapshot;
@@ -942,6 +1364,160 @@ function localRemoveBlock(snapshot, id) {
   return snapshot;
 }
 
+function localApplyMode(snapshot, modeId) {
+  const value = String(modeId || "code-sprint");
+  snapshot.session.modeId = value;
+  snapshot.session.modeLabel = prettyLabel(value);
+  switch (value) {
+    case "debug-bash":
+      snapshot.session.mode = "debug";
+      snapshot.session.focusMinutes = 25;
+      snapshot.session.breakMinutes = 5;
+      snapshot.session.objective = "Reproduce the issue and prove the fix.";
+      break;
+    case "review-block":
+      snapshot.session.mode = "review";
+      snapshot.session.focusMinutes = 40;
+      snapshot.session.breakMinutes = 10;
+      snapshot.session.objective = "Read the diff, call out risks, and decide.";
+      break;
+    case "architecture":
+      snapshot.session.mode = "plan";
+      snapshot.session.focusMinutes = 90;
+      snapshot.session.breakMinutes = 15;
+      snapshot.session.objective = "Write the design, tradeoffs, and rollout path.";
+      break;
+    case "writing":
+      snapshot.session.mode = "learn";
+      snapshot.session.focusMinutes = 45;
+      snapshot.session.breakMinutes = 10;
+      snapshot.session.objective = "Draft the outline and keep the narrative clean.";
+      break;
+    case "planning":
+      snapshot.session.mode = "plan";
+      snapshot.session.focusMinutes = 60;
+      snapshot.session.breakMinutes = 10;
+      snapshot.session.objective = "Reduce the problem to a sequence of safe slices.";
+      break;
+    default:
+      snapshot.session.mode = "deep-work";
+      snapshot.session.focusMinutes = 50;
+      snapshot.session.breakMinutes = 10;
+      snapshot.session.objective = "Ship the smallest valuable slice.";
+      break;
+  }
+  addHistoryEntry(snapshot, {
+    type: "mode-applied",
+    title: "Project mode applied",
+    detail: snapshot.session.modeLabel || value
+  });
+  return snapshot;
+}
+
+function autopilotModeId(snapshot) {
+  const autopilot = deriveAutopilot(snapshot);
+  return autopilot.recommendedModeId;
+}
+
+function localAddBudget(snapshot, payload) {
+  const host = normalizeHost(payload?.host);
+  if (!host) throw new Error("Budget host is required");
+  snapshot.budgets.unshift(createBudgetRule(host, payload?.label ?? host, payload?.dailyLimit ?? 5));
+  return snapshot;
+}
+
+function localUpdateBudget(snapshot, id, payload) {
+  const budget = snapshot.budgets.find((item) => item.id === id);
+  if (!budget) throw new Error("Budget not found");
+  budget.label = String(payload?.label ?? budget.label).trim().slice(0, 80);
+  budget.host = normalizeHost(payload?.host ?? budget.host);
+  budget.dailyLimit = clampNumber(payload?.dailyLimit ?? budget.dailyLimit, 1, 50);
+  budget.enabled = payload?.enabled ?? budget.enabled;
+  return snapshot;
+}
+
+function localRemoveBudget(snapshot, id) {
+  snapshot.budgets = snapshot.budgets.filter((item) => item.id !== id);
+  return snapshot;
+}
+
+function localResetBudgets(snapshot) {
+  snapshot.budgets = snapshot.budgets.map((budget) => ({
+    ...budget,
+    used: 0,
+    lastResetDate: todayStamp()
+  }));
+  return snapshot;
+}
+
+function localClearForensics(snapshot) {
+  snapshot.forensics = {
+    blockedAttempts: 0,
+    tabSwitches: 0,
+    focusEscapes: 0,
+    topBlockedHosts: []
+  };
+  return snapshot;
+}
+
+function localRecordBlockedAttempt(snapshot, payload) {
+  const host = normalizeHost(payload?.host ?? payload?.url ?? payload?.referrer ?? "");
+  snapshot.forensics.blockedAttempts += 1;
+  if (host) {
+    snapshot.forensics.topBlockedHosts = [host, ...snapshot.forensics.topBlockedHosts.filter((item) => item !== host)].slice(0, 6);
+  }
+  return snapshot;
+}
+
+function localRecordTabSwitch(snapshot, payload) {
+  snapshot.forensics.tabSwitches += 1;
+  snapshot.forensics.focusEscapes += 1;
+  snapshot.session.lastObservedTab = {
+    url: String(payload?.url ?? "").trim().slice(0, 500),
+    title: String(payload?.title ?? payload?.url ?? "Tab").trim().slice(0, 140),
+    observedAt: new Date().toISOString()
+  };
+  return snapshot;
+}
+
+function localLinkTaskContext(snapshot, taskId, payload) {
+  const task = snapshot.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found");
+  const url = String(payload?.url ?? snapshot.session.lastObservedTab?.url ?? "").trim();
+  if (!url) throw new Error("A context URL is required");
+  task.contextLinks = Array.isArray(task.contextLinks) ? task.contextLinks : [];
+  if (!task.contextLinks.some((link) => link.url === url)) {
+    task.contextLinks.unshift({
+      title: String(payload?.title ?? snapshot.session.lastObservedTab?.title ?? url).trim().slice(0, 140),
+      url,
+      createdAt: new Date().toISOString()
+    });
+  }
+  return snapshot;
+}
+
+function localUnlinkTaskContext(snapshot, taskId, url) {
+  const task = snapshot.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found");
+  task.contextLinks = Array.isArray(task.contextLinks) ? task.contextLinks.filter((link) => link.url !== url) : [];
+  return snapshot;
+}
+
+function localCaptureContext(source) {
+  return {
+    capturedAt: new Date().toISOString(),
+    source: String(source ?? "manual").trim(),
+    tabs: []
+  };
+}
+
+function prettyLabel(value) {
+  return String(value || "balanced")
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function clampNumber(value, min, max) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return min;
@@ -949,10 +1525,38 @@ function clampNumber(value, min, max) {
 }
 
 function prettyMode(mode) {
-  return String(mode || "deep-work")
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  switch (String(mode || "deep-work")) {
+    case "deep-work":
+      return "Deep work";
+    case "debug":
+      return "Debug sprint";
+    case "review":
+      return "Review block";
+    case "plan":
+      return "Planning";
+    case "learn":
+      return "Learning";
+    default:
+      return String(mode || "deep-work")
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+  }
+}
+
+function modeIdForSessionMode(mode) {
+  switch (String(mode || "deep-work")) {
+    case "debug":
+      return "debug-bash";
+    case "review":
+      return "review-block";
+    case "plan":
+      return "architecture";
+    case "learn":
+      return "writing";
+    default:
+      return "code-sprint";
+  }
 }
 
 function emptyState(title, description) {

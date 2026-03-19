@@ -450,6 +450,10 @@ textarea:focus {
   margin-bottom: 16px;
 }
 
+.budget-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .task-list,
 .block-list,
 .activity-list {
@@ -558,6 +562,14 @@ textarea {
   margin-bottom: 6px;
 }
 
+.preset-card.active {
+  border-color: rgba(114, 240, 255, 0.38);
+  background:
+    linear-gradient(180deg, rgba(114, 240, 255, 0.12), rgba(255, 255, 255, 0.05)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: 0 14px 36px rgba(114, 240, 255, 0.12);
+}
+
 .preset-card small,
 .info-card p,
 .activity-item small {
@@ -594,6 +606,10 @@ textarea {
   padding-top: 8vh;
   background: rgba(1, 3, 10, 0.58);
   backdrop-filter: blur(10px);
+}
+
+.palette-backdrop[hidden] {
+  display: none !important;
 }
 
 .palette {

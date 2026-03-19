@@ -8,8 +8,9 @@
       name="description"
       content="Advanced Focus Mode for developers with deep work sessions, task stacking, distraction shielding, and session analytics."
     />
-    <link rel="stylesheet" href="newtab.css" />
-    <script type="module" src="newtab.js"></script>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="newtab.css?v=20260319" />
+    <script type="module" src="newtab.js?v=20260319"></script>
   </head>
   <body>
     <div class="ambient ambient-a"></div>
@@ -194,6 +195,10 @@
               <span id="review-generated-at">Auto-generated</span>
             </div>
             <p class="review-title" id="review-title">Start a session to generate a review.</p>
+            <div class="button-row">
+              <button class="secondary-button" id="copy-report" type="button">Copy report</button>
+              <button class="ghost-button" id="download-report" type="button">Download report</button>
+            </div>
             <div class="review-grid">
               <div>
                 <span class="meta-label">Objective</span>
@@ -286,29 +291,105 @@
         <section class="panel">
           <div class="panel-head">
             <div>
+              <p class="section-kicker">Focus recovery</p>
+              <h2>Restore the exact context</h2>
+            </div>
+            <span class="status-pill muted" id="recovery-status">No context saved</span>
+          </div>
+
+          <div class="button-row">
+            <button class="primary-button" id="capture-context" type="button">Capture context</button>
+            <button class="secondary-button" id="restore-context" type="button">Restore context</button>
+          </div>
+
+          <div class="info-grid">
+            <article class="info-card">
+              <span class="info-label">What it saves</span>
+              <strong>Work tabs and layout</strong>
+              <p>Capture the current session window so you can reopen it later instead of reconstructing it.</p>
+            </article>
+            <article class="info-card">
+              <span class="info-label">Why it stands out</span>
+              <strong>Momentum recovery</strong>
+              <p>Most blockers stop distraction. This restores your exact flow after interruption.</p>
+            </article>
+          </div>
+
+          <div class="activity-card">
+            <div class="panel-subhead">
+              <h3>Saved tabs</h3>
+              <span>Latest context snapshot</span>
+            </div>
+            <ul class="activity-list" id="recovery-list"></ul>
+          </div>
+
+          <div class="notes-block">
+            <div class="panel-subhead">
+              <h3>Parking lot</h3>
+              <span>Side thoughts and links</span>
+            </div>
+            <form class="inline-form" id="parking-form">
+              <input
+                id="parking-input"
+                type="text"
+                maxlength="140"
+                placeholder="Park a distraction, link, or next thought"
+                autocomplete="off"
+              />
+              <button class="primary-button" type="submit">Park item</button>
+            </form>
+
+            <div class="button-row">
+              <button class="ghost-button" id="clear-parking" type="button">Clear parking lot</button>
+            </div>
+
+            <div class="block-list" id="parking-list" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Adaptive autopilot</p>
+              <h2>Let the session tune itself</h2>
+            </div>
+            <span class="status-pill muted" id="autopilot-level">Balanced</span>
+          </div>
+
+          <div class="coach-card">
+            <div class="panel-subhead">
+              <h3>Autopilot</h3>
+              <span id="autopilot-confidence">0% confidence</span>
+            </div>
+            <p class="coach-rationale" id="autopilot-rationale">
+              The session will adapt after a few interruptions and completions.
+            </p>
+            <div class="coach-grid">
+              <div>
+                <span class="meta-label">Recommended mode</span>
+                <strong id="autopilot-mode">Code sprint</strong>
+              </div>
+              <div>
+                <span class="meta-label">Strict blocking</span>
+                <strong id="autopilot-blocking">Off</strong>
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" id="apply-autopilot" type="button">Apply recommendation</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
               <p class="section-kicker">Developer presets</p>
               <h2>Intentional work modes</h2>
+              <p class="lede">Choose a project mode that fits the work instead of forcing one timer shape for every task.</p>
             </div>
           </div>
 
-          <div class="preset-grid" id="preset-grid">
-            <button class="preset-card" data-preset="code-sprint" type="button">
-              <span>Code sprint</span>
-              <small>50m focus, 10m break, implementation-first.</small>
-            </button>
-            <button class="preset-card" data-preset="debug-bash" type="button">
-              <span>Debug bash</span>
-              <small>25m focus, logs and reproduction flow.</small>
-            </button>
-            <button class="preset-card" data-preset="review-block" type="button">
-              <span>Review block</span>
-              <small>40m focus, diff reading and decisions.</small>
-            </button>
-            <button class="preset-card" data-preset="architecture" type="button">
-              <span>Architecture block</span>
-              <small>90m focus, design notes and tradeoffs.</small>
-            </button>
-          </div>
+          <div class="preset-grid" id="mode-grid"></div>
 
           <div class="activity-card">
             <div class="panel-subhead">
@@ -316,6 +397,60 @@
               <span>Latest session events</span>
             </div>
             <ul class="activity-list" id="activity-list"></ul>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Focus budgets</p>
+              <h2>Limit distraction by category</h2>
+            </div>
+            <span class="status-pill muted" id="budget-status">Ready</span>
+          </div>
+
+          <form class="inline-form budget-form" id="budget-form">
+            <input id="budget-host" type="text" maxlength="120" placeholder="youtube.com" autocomplete="off" />
+            <input id="budget-label" type="text" maxlength="80" placeholder="Video budget" autocomplete="off" />
+            <input id="budget-limit" type="number" min="1" max="50" step="1" value="5" />
+            <button class="primary-button" type="submit">Add budget</button>
+          </form>
+
+          <div class="button-row">
+            <button class="ghost-button" id="reset-budgets" type="button">Reset usage</button>
+            <button class="ghost-button" id="clear-forensics" type="button">Clear forensics</button>
+          </div>
+
+          <div class="block-list" id="budget-list" aria-live="polite"></div>
+
+          <div class="activity-card">
+            <div class="panel-subhead">
+              <h3>Session replay</h3>
+              <span>Timeline of interruptions and recoveries</span>
+            </div>
+            <div class="info-grid">
+              <article class="info-card">
+                <span class="info-label">Blocked attempts</span>
+                <strong id="forensics-blocked">0</strong>
+                <p>Attempts to open shielded sites during a focus session.</p>
+              </article>
+              <article class="info-card">
+                <span class="info-label">Tab switches</span>
+                <strong id="forensics-switches">0</strong>
+                <p>Tab changes recorded while the session was active.</p>
+              </article>
+              <article class="info-card">
+                <span class="info-label">Focus escapes</span>
+                <strong id="forensics-escapes">0</strong>
+                <p>Interruptions that pulled the session away from the target.</p>
+              </article>
+              <article class="info-card">
+                <span class="info-label">Smart suggestions</span>
+                <strong id="smart-block-count">0</strong>
+                <p>Sites the extension thinks deserve a stronger shield.</p>
+              </article>
+            </div>
+            <ul class="activity-list" id="replay-list"></ul>
           </div>
         </section>
       </section>

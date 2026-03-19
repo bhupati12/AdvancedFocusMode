@@ -10,9 +10,11 @@ Chrome extension for deep work sessions, task stacking, distraction shielding, f
 - Distraction shielding with dynamic blocking rules
 - Focus recovery with context capture and restore
 - Parking lot for side thoughts and links
+- Task-to-context linking and project mode presets
 - Adaptive autopilot suggestions
-- Focus budgets and interruption forensics
-- Session replay and wrap-up reports
+- Interruption forensics and session replay
+- Focus budgets for distraction categories
+- Session wrap-up report for copy/download
 - Options page for export, import, and full reset
 - Keyboard shortcuts for core session actions
 
