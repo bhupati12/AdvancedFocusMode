@@ -29,6 +29,7 @@
 
         <div class="hero-actions">
           <button class="ghost-button" data-action="open-clean-tab" type="button">Open clean tab</button>
+          <button class="ghost-button" data-action="open-palette" type="button">Command palette</button>
           <button class="ghost-button" data-action="copy-summary" type="button">Copy summary</button>
           <button class="ghost-button" data-action="open-options" type="button">Settings</button>
           <button class="primary-button" data-action="export-state" type="button">Export state</button>
@@ -114,6 +115,21 @@
                 placeholder="Ship the fix, keep the scope tight, and finish with verification."
               />
             </label>
+
+            <label class="field">
+              <span>Project</span>
+              <input id="project-name" type="text" maxlength="80" placeholder="Advanced Focus Mode" />
+            </label>
+
+            <label class="field">
+              <span>Branch</span>
+              <input id="project-branch" type="text" maxlength="80" placeholder="feature/focus-engine" />
+            </label>
+
+            <label class="field">
+              <span>Ticket</span>
+              <input id="project-ticket" type="text" maxlength="80" placeholder="AFM-102" />
+            </label>
           </div>
 
           <div class="button-row">
@@ -151,6 +167,46 @@
             <div>
               <span class="meta-label">Next break</span>
               <strong id="break-preview">10m break</strong>
+            </div>
+          </div>
+
+          <div class="coach-card">
+            <div class="panel-subhead">
+              <h3>Focus coach</h3>
+              <span id="coach-confidence">Adaptive suggestions</span>
+            </div>
+            <p class="coach-rationale" id="coach-rationale">The coach will adapt after your first few sessions.</p>
+            <div class="coach-grid">
+              <div>
+                <span class="meta-label">Recommended focus</span>
+                <strong id="coach-focus">50m</strong>
+              </div>
+              <div>
+                <span class="meta-label">Recommended break</span>
+                <strong id="coach-break">10m</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="review-card">
+            <div class="panel-subhead">
+              <h3>Session review</h3>
+              <span id="review-generated-at">Auto-generated</span>
+            </div>
+            <p class="review-title" id="review-title">Start a session to generate a review.</p>
+            <div class="review-grid">
+              <div>
+                <span class="meta-label">Objective</span>
+                <strong id="review-objective">No objective captured</strong>
+              </div>
+              <div>
+                <span class="meta-label">Top completed tasks</span>
+                <strong id="review-top-tasks">Nothing yet</strong>
+              </div>
+              <div>
+                <span class="meta-label">Next action</span>
+                <strong id="review-next-action">Pick the next smallest safe slice</strong>
+              </div>
             </div>
           </div>
         </section>
@@ -264,5 +320,19 @@
         </section>
       </section>
     </main>
+
+    <div class="palette-backdrop" id="palette-backdrop" hidden>
+      <section class="palette" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+        <div class="palette-head">
+          <div>
+            <p class="section-kicker">Command palette</p>
+            <h2 id="palette-title">Quick actions</h2>
+          </div>
+          <button class="ghost-button" data-action="close-palette" type="button">Close</button>
+        </div>
+        <input id="palette-input" type="search" placeholder="Type a command or shortcut" autocomplete="off" />
+        <div class="palette-list" id="palette-list"></div>
+      </section>
+    </div>
   </body>
 </html>

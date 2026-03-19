@@ -6,6 +6,8 @@ import {
   createBlock,
   createDefaultState,
   createTask,
+  deriveAdaptivePlan,
+  summarizeSession,
   normalizeHost,
   normalizeState,
   presetMap,
@@ -98,6 +100,8 @@ async function handleMessage(message, sender) {
       return updateNotes(message.payload?.notes ?? "");
     case "settings:update":
       return updateSettings(message.payload ?? {});
+    case "project:update":
+      return updateProject(message.payload ?? {});
     case "presets:apply":
       return applyPreset(message.payload?.presetId);
     case "tab:open-clean":
@@ -146,6 +150,9 @@ async function startSession(payload) {
   const focusMinutes = clampNumber(payload?.focusMinutes ?? preset?.focusMinutes ?? state.session.focusMinutes ?? 50, 15, 240);
   const breakMinutes = clampNumber(payload?.breakMinutes ?? preset?.breakMinutes ?? state.session.breakMinutes ?? 10, 5, 60);
   const objective = String(payload?.objective ?? preset?.objective ?? state.session.objective ?? "").trim().slice(0, 180);
+  const projectName = String(payload?.projectName ?? state.session.projectName ?? "").trim().slice(0, 80);
+  const projectBranch = String(payload?.projectBranch ?? state.session.projectBranch ?? "").trim().slice(0, 80);
+  const projectTicket = String(payload?.projectTicket ?? state.session.projectTicket ?? "").trim().slice(0, 80);
 
   if (state.session.active) {
     addHistoryEntry(state, {
@@ -161,6 +168,9 @@ async function startSession(payload) {
     phase: "focus",
     pausedPhase: null,
     mode,
+    projectName,
+    projectBranch,
+    projectTicket,
     objective,
     focusMinutes,
     breakMinutes,
@@ -176,7 +186,10 @@ async function startSession(payload) {
     title: "Focus session started",
     detail: `${mode} for ${focusMinutes}m. Break: ${breakMinutes}m.`,
     focusMinutes,
-    breakMinutes
+    breakMinutes,
+    projectName,
+    projectBranch,
+    projectTicket
   });
 
   await saveAndApply(state);
@@ -261,7 +274,11 @@ async function completeSession(source) {
       title: "Session completed",
       detail: `Recorded ${completedMinutes} focus minute(s) via ${source}.`,
       minutes: completedMinutes,
-      phase: "focus"
+      phase: "focus",
+      projectName: state.session.projectName,
+      projectBranch: state.session.projectBranch,
+      projectTicket: state.session.projectTicket,
+      sessionSummary: summarizeSession(state)
     });
 
     if (state.session.breakMinutes > 0 && source !== "timer-stop") {
@@ -276,7 +293,8 @@ async function completeSession(source) {
         title: "Break started",
         detail: `Reset the mind for ${state.session.breakMinutes} minute(s).`,
         minutes: state.session.breakMinutes,
-        phase: "break"
+        phase: "break",
+        sessionSummary: summarizeSession(state)
       });
     } else {
       state.session = {
@@ -468,6 +486,20 @@ async function updateSettings(settings) {
   return buildSnapshot(state);
 }
 
+async function updateProject(payload) {
+  const state = await loadState();
+  state.session.projectName = String(payload?.projectName ?? state.session.projectName ?? "").trim().slice(0, 80);
+  state.session.projectBranch = String(payload?.projectBranch ?? state.session.projectBranch ?? "").trim().slice(0, 80);
+  state.session.projectTicket = String(payload?.projectTicket ?? state.session.projectTicket ?? "").trim().slice(0, 80);
+  addHistoryEntry(state, {
+    type: "project-updated",
+    title: "Project context updated",
+    detail: state.session.projectName || state.session.projectTicket || state.session.projectBranch || "Project context cleared."
+  });
+  await saveAndApply(state);
+  return buildSnapshot(state);
+}
+
 async function applyPreset(presetId) {
   const state = await loadState();
   const preset = presetMap()[presetId];
@@ -608,6 +640,8 @@ async function loadState() {
 function buildSnapshot(state) {
   const currentSession = normalizeState(state);
   currentSession.session.remainingSeconds = calculateRemainingSeconds(currentSession.session);
+  currentSession.insights = deriveAdaptivePlan(currentSession);
+  currentSession.sessionSummary = summarizeSession(currentSession);
   return currentSession;
 }
 

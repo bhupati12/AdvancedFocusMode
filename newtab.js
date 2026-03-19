@@ -6,11 +6,13 @@ import {
   createBlock,
   createDefaultState,
   createTask,
+  deriveAdaptivePlan,
   formatDuration,
   formatMinutes,
   formatRelativeTimestamp,
   normalizeHost,
   normalizeState,
+  summarizeSession,
   todayStamp
 } from "./shared.js";
 
@@ -25,7 +27,8 @@ const suggestions = [
 
 const state = {
   snapshot: null,
-  saveTimer: null
+  saveTimer: null,
+  paletteOpen: false
 };
 
 const extensionBridgeAvailable = Boolean(globalThis.chrome?.runtime?.sendMessage);
@@ -43,6 +46,9 @@ const els = {
   focusMinutes: document.getElementById("focus-minutes"),
   breakMinutes: document.getElementById("break-minutes"),
   sessionObjective: document.getElementById("session-objective"),
+  projectName: document.getElementById("project-name"),
+  projectBranch: document.getElementById("project-branch"),
+  projectTicket: document.getElementById("project-ticket"),
   notificationsEnabled: document.getElementById("notifications-enabled"),
   strictBlocking: document.getElementById("strict-blocking"),
   autoStartBreak: document.getElementById("auto-start-break"),
@@ -62,10 +68,33 @@ const els = {
   metricStreak: document.getElementById("metric-streak"),
   metricScore: document.getElementById("metric-score"),
   actionStatus: document.getElementById("action-status"),
+  coachConfidence: document.getElementById("coach-confidence"),
+  coachRationale: document.getElementById("coach-rationale"),
+  coachFocus: document.getElementById("coach-focus"),
+  coachBreak: document.getElementById("coach-break"),
+  reviewGeneratedAt: document.getElementById("review-generated-at"),
+  reviewTitle: document.getElementById("review-title"),
+  reviewObjective: document.getElementById("review-objective"),
+  reviewTopTasks: document.getElementById("review-top-tasks"),
+  reviewNextAction: document.getElementById("review-next-action"),
+  paletteBackdrop: document.getElementById("palette-backdrop"),
+  paletteInput: document.getElementById("palette-input"),
+  paletteList: document.getElementById("palette-list"),
   togglePause: document.querySelector('[data-action="toggle-pause"]'),
   completeSession: document.querySelector('[data-action="complete-session"]'),
   skipBreak: document.querySelector('[data-action="skip-break"]')
 };
+
+const paletteActions = [
+  { title: "Start session", hint: "Launch the timer with the current project and objective.", action: "start-session" },
+  { title: "Pause or resume", hint: "Toggle the current session state.", action: "toggle-pause" },
+  { title: "Finish session", hint: "Close the active focus block.", action: "complete-session" },
+  { title: "Skip break", hint: "End the active break and return to idle.", action: "skip-break" },
+  { title: "Reset session", hint: "Clear the current timer and state.", action: "reset-session" },
+  { title: "Open settings", hint: "Manage backups, shortcuts, and resets.", action: "open-options" },
+  { title: "Export backup", hint: "Download the current focus state.", action: "export-state" },
+  { title: "Open clean tab", hint: "Launch a blank tab for distraction-free work.", action: "open-clean-tab" }
+];
 
 await init();
 
@@ -90,6 +119,12 @@ function wireEvents() {
   on(els.sessionMode, "change", renderSessionPreview);
   on(els.focusMinutes, "input", renderSessionPreview);
   on(els.breakMinutes, "input", renderSessionPreview);
+  on(els.projectName, "input", queueProjectSave);
+  on(els.projectBranch, "input", queueProjectSave);
+  on(els.projectTicket, "input", queueProjectSave);
+  on(els.paletteBackdrop, "click", handlePaletteBackdropClick);
+  on(els.paletteInput, "input", handlePaletteInput);
+  on(els.paletteInput, "keydown", handlePaletteKeydown);
 
   document.addEventListener("click", handleClick);
   document.addEventListener("keydown", handleKeyboard);
@@ -153,6 +188,12 @@ async function handleAction(action) {
     case "open-options":
       await withStatus("Opening settings...", () => chrome.runtime.openOptionsPage());
       break;
+    case "open-palette":
+      openPalette();
+      break;
+    case "close-palette":
+      closePalette();
+      break;
     default:
       break;
   }
@@ -171,6 +212,16 @@ async function handleKeyboard(event) {
   if (event.key === "Enter") {
     event.preventDefault();
     await command("session:start", sessionPayload());
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openPalette();
+    return;
+  }
+
+  if (event.key === "Escape" && state.paletteOpen) {
+    closePalette();
   }
 }
 
@@ -209,6 +260,17 @@ async function syncSettings() {
     strictBlocking: els.strictBlocking.checked,
     autoStartBreak: els.autoStartBreak.checked
   });
+}
+
+function queueProjectSave() {
+  window.clearTimeout(state.saveTimer);
+  state.saveTimer = window.setTimeout(() => {
+    void command("project:update", {
+      projectName: els.projectName.value,
+      projectBranch: els.projectBranch.value,
+      projectTicket: els.projectTicket.value
+    });
+  }, 250);
 }
 
 function queueNoteSave() {
@@ -281,16 +343,22 @@ function render() {
   els.focusMinutes.value = session.focusMinutes || 50;
   els.breakMinutes.value = session.breakMinutes || 10;
   els.sessionObjective.value = session.objective || "";
+  els.projectName.value = session.projectName || "";
+  els.projectBranch.value = session.projectBranch || "";
+  els.projectTicket.value = session.projectTicket || "";
   els.notes.value = snapshot.notes || "";
 
   renderMetrics(snapshot);
   renderSession(snapshot);
+  renderCoach(snapshot);
+  renderReview(snapshot);
   renderTasks(snapshot.tasks || []);
   renderBlocks(snapshot.blocks || []);
   renderActivity(snapshot.history || []);
   renderSuggestedBlocks();
   renderSessionPreview();
   renderTimer();
+  renderPalette();
   updateDocumentTitle();
 }
 
@@ -335,6 +403,23 @@ function renderSessionPreview() {
   const mode = els.sessionMode.value || "deep-work";
   els.modePreview.textContent = prettyMode(mode);
   els.breakPreview.textContent = `${formatMinutes(Number(els.breakMinutes.value || 10))} break`;
+}
+
+function renderCoach(snapshot) {
+  const insights = snapshot.insights ?? deriveAdaptivePlan(snapshot);
+  els.coachConfidence.textContent = `${insights.confidence}% confidence`;
+  els.coachRationale.textContent = insights.rationale;
+  els.coachFocus.textContent = formatMinutes(insights.recommendedFocusMinutes);
+  els.coachBreak.textContent = formatMinutes(insights.recommendedBreakMinutes);
+}
+
+function renderReview(snapshot) {
+  const summary = snapshot.sessionSummary ?? summarizeSession(snapshot);
+  els.reviewGeneratedAt.textContent = `Updated ${formatRelativeTimestamp(summary.generatedAt)}`;
+  els.reviewTitle.textContent = summary.title || "Start a session to generate a review.";
+  els.reviewObjective.textContent = summary.objective || "No objective captured";
+  els.reviewTopTasks.textContent = summary.topTasks || "Nothing yet";
+  els.reviewNextAction.textContent = summary.nextAction || "Pick the next smallest safe slice";
 }
 
 function renderTimer() {
@@ -456,7 +541,10 @@ function sessionPayload() {
     mode: els.sessionMode.value,
     focusMinutes: Number(els.focusMinutes.value),
     breakMinutes: Number(els.breakMinutes.value),
-    objective: els.sessionObjective.value
+    objective: els.sessionObjective.value,
+    projectName: els.projectName.value,
+    projectBranch: els.projectBranch.value,
+    projectTicket: els.projectTicket.value
   };
 }
 
@@ -499,6 +587,80 @@ function updateDocumentTitle() {
 
 function setActionStatus(message) {
   els.actionStatus.textContent = message;
+}
+
+function openPalette() {
+  state.paletteOpen = true;
+  els.paletteBackdrop.hidden = false;
+  els.paletteInput.value = "";
+  renderPalette();
+  window.setTimeout(() => els.paletteInput.focus(), 0);
+}
+
+function closePalette() {
+  state.paletteOpen = false;
+  els.paletteBackdrop.hidden = true;
+}
+
+function renderPalette(query = els.paletteInput.value) {
+  if (!state.paletteOpen) return;
+  const term = String(query || "").trim().toLowerCase();
+  const items = paletteActions.filter((item) => {
+    if (!term) return true;
+    return `${item.title} ${item.hint}`.toLowerCase().includes(term);
+  });
+
+  els.paletteList.innerHTML = items
+    .map(
+      (item) => `
+        <button class="palette-item" type="button" data-palette-action="${item.action}">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            <small>${escapeHtml(item.hint)}</small>
+          </div>
+          <span class="meta-label">${escapeHtml(shortcutFor(item.action))}</span>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function handlePaletteInput() {
+  renderPalette();
+}
+
+async function handlePaletteKeydown(event) {
+  if (event.key === "Enter") {
+    const first = els.paletteList.querySelector("[data-palette-action]");
+    if (first) {
+      first.click();
+    }
+  }
+}
+
+async function handlePaletteBackdropClick(event) {
+  if (event.target === els.paletteBackdrop) {
+    closePalette();
+    return;
+  }
+
+  const button = event.target.closest("[data-palette-action]");
+  if (!button) return;
+  closePalette();
+  await handleAction(button.dataset.paletteAction);
+}
+
+function shortcutFor(action) {
+  switch (action) {
+    case "start-session":
+      return "Enter";
+    case "toggle-pause":
+      return "Space";
+    case "open-palette":
+      return "Ctrl+K";
+    default:
+      return "";
+  }
 }
 
 function on(element, eventName, handler) {
@@ -544,6 +706,8 @@ async function localCommand(type, payload) {
         ...payload
       };
       return snapshot;
+    case "project:update":
+      return localUpdateProject(snapshot, payload);
     case "tab:open-clean":
       window.open("about:blank", "_blank", "noopener,noreferrer");
       return snapshot;
@@ -578,12 +742,18 @@ function localStartSession(snapshot, payload) {
   const focusMinutes = clampNumber(payload?.focusMinutes ?? snapshot.session.focusMinutes ?? 50, 15, 240);
   const breakMinutes = clampNumber(payload?.breakMinutes ?? snapshot.session.breakMinutes ?? 10, 5, 60);
   const objective = String(payload?.objective ?? snapshot.session.objective ?? "").trim().slice(0, 180);
+  const projectName = String(payload?.projectName ?? snapshot.session.projectName ?? "").trim().slice(0, 80);
+  const projectBranch = String(payload?.projectBranch ?? snapshot.session.projectBranch ?? "").trim().slice(0, 80);
+  const projectTicket = String(payload?.projectTicket ?? snapshot.session.projectTicket ?? "").trim().slice(0, 80);
 
   snapshot.session = {
     active: true,
     phase: "focus",
     pausedPhase: null,
     mode,
+    projectName,
+    projectBranch,
+    projectTicket,
     objective,
     focusMinutes,
     breakMinutes,
@@ -664,7 +834,11 @@ function localCompleteSession(snapshot) {
     type: "session-completed",
     title: "Session completed",
     detail: `Recorded ${completedMinutes} minute(s).`,
-    minutes: completedMinutes
+    minutes: completedMinutes,
+    projectName: snapshot.session.projectName,
+    projectBranch: snapshot.session.projectBranch,
+    projectTicket: snapshot.session.projectTicket,
+    sessionSummary: summarizeSession(snapshot)
   });
 
   if (snapshot.session.breakMinutes > 0) {
@@ -675,7 +849,8 @@ function localCompleteSession(snapshot) {
     addHistoryEntry(snapshot, {
       type: "break-started",
       title: "Break started",
-      detail: `Break for ${snapshot.session.breakMinutes} minute(s).`
+      detail: `Break for ${snapshot.session.breakMinutes} minute(s).`,
+      sessionSummary: summarizeSession(snapshot)
     });
   } else {
     snapshot.session = {
@@ -711,6 +886,18 @@ function localResetSession(snapshot) {
     type: "session-reset",
     title: "Session reset",
     detail: "Timer cleared."
+  });
+  return snapshot;
+}
+
+function localUpdateProject(snapshot, payload) {
+  snapshot.session.projectName = String(payload?.projectName ?? snapshot.session.projectName ?? "").trim().slice(0, 80);
+  snapshot.session.projectBranch = String(payload?.projectBranch ?? snapshot.session.projectBranch ?? "").trim().slice(0, 80);
+  snapshot.session.projectTicket = String(payload?.projectTicket ?? snapshot.session.projectTicket ?? "").trim().slice(0, 80);
+  addHistoryEntry(snapshot, {
+    type: "project-updated",
+    title: "Project context updated",
+    detail: snapshot.session.projectName || snapshot.session.projectTicket || snapshot.session.projectBranch || "Project context cleared."
   });
   return snapshot;
 }
