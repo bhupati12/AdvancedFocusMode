@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Advanced Focus Mode for Developers",
+  "version": "1.0.0",
+  "description": "Developer-grade focus mode with deep work sessions, distraction shielding, task stacking, notes, and session analytics.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "action": {
+    "default_title": "Open Advanced Focus Mode"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "open-dashboard": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y"
+      },
+      "description": "Open the focus dashboard"
+    },
+    "toggle-session": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P"
+      },
+      "description": "Pause or resume the current session"
+    },
+    "finish-session": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+M"
+      },
+      "description": "Complete the current session"
+    },
+    "skip-break": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S"
+      },
+      "description": "Skip the active break"
+    }
+  },
+  "permissions": [
+    "alarms",
+    "declarativeNetRequest",
+    "notifications",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}

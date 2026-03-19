@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advanced Focus Mode Settings</title>
+    <link rel="stylesheet" href="options.css" />
+    <script type="module" src="options.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Advanced settings</p>
+        <h1>Focus mode settings</h1>
+        <p class="lede">
+          Restore a saved focus state, export the current workspace, or clear
+          everything when you want a clean slate.
+        </p>
+      </section>
+
+      <section class="layout">
+        <article class="panel">
+          <h2>State backup</h2>
+          <p class="muted">
+            Import a JSON export from a previous session or save the current
+            state as a file.
+          </p>
+
+          <div class="actions">
+            <label class="primary-button file-label">
+              Import backup
+              <input id="import-file" type="file" accept="application/json,.json" />
+            </label>
+            <button id="export-state" class="secondary-button" type="button">Export backup</button>
+            <button id="reset-state" class="danger-button" type="button">Reset all state</button>
+          </div>
+
+          <div class="summary" id="state-summary"></div>
+          <p class="status" id="status" aria-live="polite"></p>
+        </article>
+
+        <article class="panel">
+          <h2>Keyboard shortcuts</h2>
+          <p class="muted">Built-in commands configured for developer workflows.</p>
+
+          <div class="shortcut-list">
+            <div class="shortcut-row"><span>Open dashboard</span><code>Ctrl+Shift+Y</code></div>
+            <div class="shortcut-row"><span>Pause or resume</span><code>Ctrl+Shift+P</code></div>
+            <div class="shortcut-row"><span>Complete session</span><code>Ctrl+Shift+M</code></div>
+            <div class="shortcut-row"><span>Skip break</span><code>Ctrl+Shift+S</code></div>
+            <div class="shortcut-row"><span>Reset session</span><code>Use the dashboard button</code></div>
+          </div>
+
+          <div class="actions">
+            <button id="open-dashboard" class="primary-button" type="button">Open dashboard</button>
+            <button id="open-clean" class="secondary-button" type="button">Open clean tab</button>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

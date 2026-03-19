@@ -1,0 +1,8 @@
+{
+  "name": "advanced-focus-mode-for-developers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1"
+  }
+}

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advanced Focus Mode</title>
+    <meta
+      name="description"
+      content="Advanced Focus Mode for developers with deep work sessions, task stacking, distraction shielding, and session analytics."
+    />
+    <link rel="stylesheet" href="newtab.css" />
+    <script type="module" src="newtab.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <div class="ambient ambient-c"></div>
+
+    <main class="shell">
+      <header class="hero">
+        <div class="brand">
+          <p class="eyebrow">Developer operating system</p>
+          <h1>Advanced Focus Mode</h1>
+          <p class="lede">
+            Keep deep work visible, distractions contained, and the next action
+            impossible to miss.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <button class="ghost-button" data-action="open-clean-tab" type="button">Open clean tab</button>
+          <button class="ghost-button" data-action="copy-summary" type="button">Copy summary</button>
+          <button class="ghost-button" data-action="open-options" type="button">Settings</button>
+          <button class="primary-button" data-action="export-state" type="button">Export state</button>
+        </div>
+      </header>
+
+      <p class="action-status" id="action-status" aria-live="polite"></p>
+
+      <section class="metrics-grid" aria-label="Focus metrics">
+        <article class="metric-card">
+          <span class="metric-label">Deep work today</span>
+          <strong id="metric-deep-work">0m</strong>
+          <small>from completed sessions</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Sessions today</span>
+          <strong id="metric-sessions">0</strong>
+          <small>finished or closed</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Shielded sites</span>
+          <strong id="metric-shielded">0</strong>
+          <small>enabled filters</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Streak</span>
+          <strong id="metric-streak">0</strong>
+          <small>active days</small>
+        </article>
+        <article class="metric-card metric-card-accent">
+          <span class="metric-label">Focus score</span>
+          <strong id="metric-score">0</strong>
+          <small>adaptive health</small>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <section class="panel session-panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Session control</p>
+              <h2>Deep work timer</h2>
+            </div>
+            <span class="status-pill" id="session-status">Idle</span>
+          </div>
+
+          <div class="timer-ring" id="timer-ring" style="--progress: 0%">
+            <div class="timer-core">
+              <span class="timer-label">Remaining</span>
+              <strong id="timer-display">50:00</strong>
+              <small id="timer-detail">Set a mission and start the timer.</small>
+            </div>
+          </div>
+
+          <div class="controls">
+            <label class="field">
+              <span>Mode</span>
+              <select id="session-mode">
+                <option value="deep-work">Deep work</option>
+                <option value="debug">Debug sprint</option>
+                <option value="review">Review block</option>
+                <option value="plan">Planning</option>
+                <option value="learn">Learning</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Focus minutes</span>
+              <input id="focus-minutes" type="number" min="15" max="240" step="5" value="50" />
+            </label>
+
+            <label class="field">
+              <span>Break minutes</span>
+              <input id="break-minutes" type="number" min="5" max="60" step="1" value="10" />
+            </label>
+
+            <label class="field field-wide">
+              <span>Mission</span>
+              <input
+                id="session-objective"
+                type="text"
+                maxlength="180"
+                placeholder="Ship the fix, keep the scope tight, and finish with verification."
+              />
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button class="primary-button" data-action="start-session" type="button">Start session</button>
+            <button class="secondary-button" data-action="toggle-pause" type="button">Pause</button>
+            <button class="secondary-button" data-action="complete-session" type="button">Finish round</button>
+            <button class="ghost-button" data-action="skip-break" type="button">Skip break</button>
+            <button class="ghost-button" data-action="reset-session" type="button">Reset</button>
+          </div>
+
+          <div class="toggles">
+            <label class="toggle">
+              <input id="notifications-enabled" type="checkbox" />
+              <span>Notifications</span>
+            </label>
+            <label class="toggle">
+              <input id="strict-blocking" type="checkbox" />
+              <span>Strict blocking</span>
+            </label>
+            <label class="toggle">
+              <input id="auto-start-break" type="checkbox" />
+              <span>Auto-start break</span>
+            </label>
+          </div>
+
+          <div class="session-meta">
+            <div>
+              <span class="meta-label">Current objective</span>
+              <strong id="objective-preview">Nothing set yet</strong>
+            </div>
+            <div>
+              <span class="meta-label">Session mode</span>
+              <strong id="mode-preview">Deep work</strong>
+            </div>
+            <div>
+              <span class="meta-label">Next break</span>
+              <strong id="break-preview">10m break</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Task stack</p>
+              <h2>One screen, one target</h2>
+            </div>
+            <button class="small-link" id="add-suggested-task" type="button">Add suggestion</button>
+          </div>
+
+          <form class="inline-form" id="task-form">
+            <input
+              id="task-input"
+              type="text"
+              maxlength="120"
+              placeholder="Add the next atomic task"
+              autocomplete="off"
+            />
+            <button class="primary-button" type="submit">Add task</button>
+          </form>
+
+          <div class="task-list" id="task-list" aria-live="polite"></div>
+
+          <div class="notes-block">
+            <div class="panel-subhead">
+              <h3>Session note</h3>
+              <span>Keep context visible, not scattered.</span>
+            </div>
+            <textarea
+              id="session-notes"
+              rows="7"
+              placeholder="Write the rationale, blockers, or the exact exit criteria for this session."
+            ></textarea>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Distraction shield</p>
+              <h2>Block the obvious traps</h2>
+            </div>
+            <span class="status-pill muted" id="shield-status">Ready</span>
+          </div>
+
+          <form class="inline-form" id="shield-form">
+            <input
+              id="shield-input"
+              type="text"
+              maxlength="120"
+              placeholder="Add a domain or host, for example youtube.com"
+              autocomplete="off"
+            />
+            <button class="secondary-button" type="submit">Shield site</button>
+          </form>
+
+          <div class="chip-row" id="shield-suggestions" aria-label="Suggested distractions"></div>
+          <div class="block-list" id="shield-list" aria-live="polite"></div>
+
+          <div class="info-grid">
+            <article class="info-card">
+              <span class="info-label">Guard rail</span>
+              <strong>Keep the goal visible</strong>
+              <p>The timer, objective, and task stack stay one click away.</p>
+            </article>
+            <article class="info-card">
+              <span class="info-label">Advanced mode</span>
+              <strong>Session history</strong>
+              <p>Completions update minutes, streaks, and the activity log.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Developer presets</p>
+              <h2>Intentional work modes</h2>
+            </div>
+          </div>
+
+          <div class="preset-grid" id="preset-grid">
+            <button class="preset-card" data-preset="code-sprint" type="button">
+              <span>Code sprint</span>
+              <small>50m focus, 10m break, implementation-first.</small>
+            </button>
+            <button class="preset-card" data-preset="debug-bash" type="button">
+              <span>Debug bash</span>
+              <small>25m focus, logs and reproduction flow.</small>
+            </button>
+            <button class="preset-card" data-preset="review-block" type="button">
+              <span>Review block</span>
+              <small>40m focus, diff reading and decisions.</small>
+            </button>
+            <button class="preset-card" data-preset="architecture" type="button">
+              <span>Architecture block</span>
+              <small>90m focus, design notes and tradeoffs.</small>
+            </button>
+          </div>
+
+          <div class="activity-card">
+            <div class="panel-subhead">
+              <h3>Activity log</h3>
+              <span>Latest session events</span>
+            </div>
+            <ul class="activity-list" id="activity-list"></ul>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
