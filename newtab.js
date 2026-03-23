@@ -1594,7 +1594,7 @@ async function localCommand(type, payload) {
     case "project:update":
       return localUpdateProject(snapshot, payload);
     case "tab:open-clean":
-      window.open("about:blank", "_blank", "noopener,noreferrer");
+      window.open("clean.html", "_blank", "noopener,noreferrer");
       return snapshot;
     case "state:import":
       return normalizeState(payload?.state);
