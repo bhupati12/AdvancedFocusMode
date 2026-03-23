@@ -18,7 +18,7 @@ function wireEvents() {
   els.exportState.addEventListener("click", exportBackup);
   els.resetState.addEventListener("click", resetState);
   els.openDashboard.addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("newtab.html"), active: true }));
-  els.openClean.addEventListener("click", () => chrome.tabs.create({ url: "about:blank", active: true }));
+  els.openClean.addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("clean.html"), active: true }));
 }
 
 async function refreshSummary() {
@@ -33,7 +33,7 @@ async function refreshSummary() {
     row("Deep work", formatMinutes(snapshot.stats.deepWorkMinutes)),
     row("Tasks complete", `${tasksDone}/${snapshot.tasks.length}`),
     row("Shielded sites", String(blocksEnabled)),
-    row("Last activity", lastActivity ? `${lastActivity.title} · ${formatRelativeTimestamp(lastActivity.createdAt)}` : "None")
+    row("Last activity", lastActivity ? `${lastActivity.title} - ${formatRelativeTimestamp(lastActivity.createdAt)}` : "None")
   ].join("");
 }
 
@@ -86,7 +86,7 @@ async function refreshSummaryFrom(snapshot) {
     row("Deep work", formatMinutes(value.stats.deepWorkMinutes)),
     row("Tasks complete", `${tasksDone}/${value.tasks.length}`),
     row("Shielded sites", String(blocksEnabled)),
-    row("Last activity", lastActivity ? `${lastActivity.title} · ${formatRelativeTimestamp(lastActivity.createdAt)}` : "None")
+    row("Last activity", lastActivity ? `${lastActivity.title} - ${formatRelativeTimestamp(lastActivity.createdAt)}` : "None")
   ].join("");
 }
 

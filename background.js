@@ -928,7 +928,7 @@ async function applyPreset(presetId) {
 }
 
 async function openCleanTab() {
-  await chrome.tabs.create({ url: "about:blank", active: true });
+  await chrome.tabs.create({ url: chrome.runtime.getURL("clean.html"), active: true });
   return { opened: true };
 }
 
@@ -1126,7 +1126,7 @@ async function recordActiveTabChange(tabId, windowId) {
   }
 
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (!tab || !isRestorableUrl(tab.url)) {
+  if (!tab || !tab.url) {
     return;
   }
 
@@ -1150,7 +1150,9 @@ async function recordActiveTabChange(tabId, windowId) {
     phase: state.session.phase
   });
 
-  await consumeBudgetForUrl(state, observedUrl, tab.title ?? observedUrl);
+  if (isRestorableUrl(observedUrl)) {
+    await consumeBudgetForUrl(state, observedUrl, tab.title ?? observedUrl);
+  }
   await saveAndApply(state);
 }
 

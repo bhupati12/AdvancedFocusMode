@@ -39,6 +39,64 @@
 
       <p class="action-status" id="action-status" aria-live="polite"></p>
 
+        <section class="panel demo-panel" data-presentation-target="demo" aria-labelledby="demo-kit-title">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Demo kit</p>
+              <h2 id="demo-kit-title">Show the workflow in 90 seconds</h2>
+            </div>
+            <div class="panel-head-actions">
+              <span class="status-pill muted">Built-in walkthrough</span>
+              <button class="ghost-button" data-action="toggle-demo-kit" type="button" aria-expanded="true" aria-controls="demo-kit-body">
+                Collapse
+              </button>
+            </div>
+          </div>
+
+          <p class="demo-kit-summary" id="demo-kit-summary" hidden>
+            Demo kit is collapsed. Click Expand to reopen the walkthrough.
+          </p>
+
+          <div class="demo-kit-body" id="demo-kit-body">
+            <div class="demo-grid">
+              <article class="demo-step">
+              <span class="demo-step-index">1</span>
+              <div>
+                <strong>Load the demo scenario</strong>
+                <p>Pre-fills project context, tasks, shields, budgets, and a live focus session.</p>
+              </div>
+            </article>
+            <article class="demo-step">
+              <span class="demo-step-index">2</span>
+              <div>
+                <strong>Open the command palette</strong>
+                <p>Show how fast keyboard-first actions work with <kbd>Ctrl</kbd> + <kbd>K</kbd>.</p>
+              </div>
+            </article>
+            <article class="demo-step">
+              <span class="demo-step-index">3</span>
+              <div>
+                <strong>Start and pause the timer</strong>
+                <p>Demonstrate the session ring, coach, and status badge changing in real time.</p>
+              </div>
+            </article>
+            <article class="demo-step">
+              <span class="demo-step-index">4</span>
+              <div>
+                <strong>Show recovery and report</strong>
+                <p>Capture context, restore it, and copy the final report for a clean wrap-up.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="button-row">
+            <button class="primary-button" data-action="load-demo-scenario" type="button">Load demo scenario</button>
+            <button class="secondary-button" data-action="start-presentation" type="button">Start presentation</button>
+            <button class="secondary-button" data-action="copy-demo-script" type="button">Copy demo script</button>
+          </div>
+        </div>
+      </section>
+
       <section class="metrics-grid" aria-label="Focus metrics">
         <article class="metric-card">
           <span class="metric-label">Deep work today</span>
@@ -68,7 +126,7 @@
       </section>
 
       <section class="workspace">
-        <section class="panel session-panel">
+        <section class="panel session-panel" data-presentation-target="session">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Session control</p>
@@ -85,30 +143,52 @@
             </div>
           </div>
 
-          <div class="controls">
-            <label class="field">
-              <span>Mode</span>
-              <select id="session-mode">
-                <option value="deep-work">Deep work</option>
-                <option value="debug">Debug sprint</option>
-                <option value="review">Review block</option>
-                <option value="plan">Planning</option>
-                <option value="learn">Learning</option>
-              </select>
-            </label>
+            <div class="controls session-control-row">
+                <label class="field field-mode">
+                  <span>Mode</span>
+                  <div class="mode-picker" data-mode-picker>
+                  <button
+                    class="mode-picker-button"
+                    id="mode-picker-button"
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="mode-picker-menu"
+                  >
+                    Deep work
+                  </button>
+                  <div class="mode-picker-menu" id="mode-picker-menu" role="listbox" hidden>
+                    <button class="mode-option" data-mode-option="deep-work" type="button">Deep work</button>
+                    <button class="mode-option" data-mode-option="debug" type="button">Debug sprint</button>
+                    <button class="mode-option" data-mode-option="review" type="button">Review block</button>
+                    <button class="mode-option" data-mode-option="plan" type="button">Planning</button>
+                    <button class="mode-option" data-mode-option="learn" type="button">Learning</button>
+                  </div>
+                  <select id="session-mode" class="sr-only" tabindex="-1" aria-hidden="true">
+                    <option value="deep-work">Deep work</option>
+                    <option value="debug">Debug sprint</option>
+                    <option value="review">Review block</option>
+                    <option value="plan">Planning</option>
+                    <option value="learn">Learning</option>
+                  </select>
+                </div>
+                </label>
 
-            <label class="field">
-              <span>Focus minutes</span>
-              <input id="focus-minutes" type="number" min="15" max="240" step="5" value="50" />
-            </label>
+              <label class="field">
+                <span>Focus minutes</span>
+                <input id="focus-minutes" type="number" min="15" max="240" step="5" value="50" />
+              </label>
 
-            <label class="field">
-              <span>Break minutes</span>
-              <input id="break-minutes" type="number" min="5" max="60" step="1" value="10" />
-            </label>
+              <label class="field">
+                <span>Break minutes</span>
+                <input id="break-minutes" type="number" min="5" max="60" step="1" value="10" />
+              </label>
+            </div>
 
-            <label class="field field-wide">
-              <span>Mission</span>
+            <div class="controls session-detail-row">
+  
+              <label class="field field-wide">
+                <span>Mission</span>
               <input
                 id="session-objective"
                 type="text"
@@ -189,7 +269,7 @@
             </div>
           </div>
 
-          <div class="review-card">
+          <div class="review-card" data-presentation-target="review">
             <div class="panel-subhead">
               <h3>Session review</h3>
               <span id="review-generated-at">Auto-generated</span>
@@ -216,7 +296,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="tasks">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Task stack</p>
@@ -251,7 +331,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="shield">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Distraction shield</p>
@@ -288,7 +368,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="recovery">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Focus recovery</p>
@@ -347,7 +427,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="autopilot">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Adaptive autopilot</p>
@@ -380,7 +460,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="presets">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Developer presets</p>
@@ -391,7 +471,7 @@
 
           <div class="preset-grid" id="mode-grid"></div>
 
-          <div class="activity-card">
+          <div class="activity-card" id="activity-log-card">
             <div class="panel-subhead">
               <h3>Activity log</h3>
               <span>Latest session events</span>
@@ -400,7 +480,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" data-presentation-target="budgets">
           <div class="panel-head">
             <div>
               <p class="section-kicker">Focus budgets</p>
@@ -455,6 +535,34 @@
         </section>
       </section>
     </main>
+
+    <aside class="presentation-hud" id="presentation-hud" hidden>
+      <section class="presentation-card" role="note" aria-labelledby="presentation-title">
+        <div class="panel-subhead">
+          <h3 id="presentation-title">Presentation mode</h3>
+          <span>Live talk track</span>
+        </div>
+        <div class="presentation-step-head">
+          <span class="presentation-step-count" id="presentation-step-count">Step 1 of 5</span>
+          <strong class="presentation-step-title" id="presentation-step-title">Load the demo scenario</strong>
+          <p class="presentation-step-copy" id="presentation-step-copy">
+            Preload the demo state so the dashboard shows a convincing real workflow.
+          </p>
+        </div>
+        <ol class="presentation-list">
+          <li>Load the demo scenario.</li>
+          <li>Open the command palette with Ctrl+K.</li>
+          <li>Start, pause, and finish the session.</li>
+          <li>Capture and restore the context.</li>
+          <li>Copy the report and export the state.</li>
+        </ol>
+        <div class="button-row">
+          <button class="ghost-button" data-action="presentation-prev" type="button">Previous</button>
+          <button class="ghost-button" data-action="presentation-next" type="button">Next</button>
+          <button class="ghost-button" data-action="toggle-presentation-mode" type="button">Exit presentation mode</button>
+        </div>
+      </section>
+    </aside>
 
     <div class="palette-backdrop" id="palette-backdrop" hidden>
       <section class="palette" role="dialog" aria-modal="true" aria-labelledby="palette-title">

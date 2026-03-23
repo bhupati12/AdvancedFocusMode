@@ -20,6 +20,8 @@ $files = @(
   'blocked.html',
   'blocked.css',
   'blocked.js',
+  'clean.html',
+  'clean.css',
   'options.html',
   'options.css',
   'options.js',

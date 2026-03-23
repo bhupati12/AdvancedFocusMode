@@ -1,38 +1,21 @@
 # Advanced Focus Mode for Developers
 
-Chrome extension for deep work sessions, task stacking, distraction shielding, focus recovery, and session analytics.
+Advanced Focus Mode is a Chrome extension for developer-focused deep work. It combines a session timer, task stack, distraction shielding, recovery tools, budgets, reporting, and presentation mode in one dashboard.
 
-## Features
+## Documentation
 
-- Deep-work timer with pause, resume, break, and reset
-- Developer presets for sprint, debugging, review, planning, and learning work
-- Editable task stack and session notes
-- Distraction shielding with dynamic blocking rules
-- Focus recovery with context capture and restore
-- Parking lot for side thoughts and links
-- Task-to-context linking and project mode presets
-- Adaptive autopilot suggestions
-- Interruption forensics and session replay
-- Focus budgets for distraction categories
-- Session wrap-up report for copy/download
-- Options page for export, import, and full reset
-- Keyboard shortcuts for core session actions
+- [Feature guide](./FEATURES.md)
+- [Privacy policy draft](./PRIVACY.md)
+- [Chrome Web Store listing draft](./STORE_LISTING.md)
+- [Install and test](./FEATURES.md#install-and-test)
+- [Keyboard shortcuts](./FEATURES.md#keyboard-shortcuts)
 
-## Keyboard shortcuts
+## Quick start
 
-- `Ctrl+Shift+Y` open dashboard
-- `Ctrl+Shift+P` pause or resume
-- `Ctrl+Shift+M` finish session
-- `Ctrl+Shift+S` skip break
-- Reset session from the dashboard button
+1. Load the extension unpacked from this folder in Chrome.
+2. Open a new tab to use the dashboard.
+3. Start a session, add tasks, and shield distracting sites.
 
-## Load unpacked
+## Build
 
-1. Open Chrome and go to `chrome://extensions`.
-2. Enable Developer mode.
-3. Click Load unpacked.
-4. Select the extension folder in this repository.
-
-## Packaging
-
-Use the included `build.ps1` to create a release zip.
+Use `build.ps1` to create a release zip.

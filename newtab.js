@@ -37,11 +37,17 @@ const suggestions = [
 const state = {
   snapshot: null,
   saveTimer: null,
-  paletteOpen: false
-};
+  paletteOpen: false,
+  presentationMode: false,
+    presentationStep: 0,
+    demoKitCollapsed: false
+  };
 
 const extensionBridgeAvailable = Boolean(globalThis.chrome?.runtime?.sendMessage);
 const localStateKey = "advanced-focus-mode.local-state";
+const presentationModeKey = "advanced-focus-mode.presentation-mode";
+const presentationStepKey = "advanced-focus-mode.presentation-step";
+const demoKitCollapsedKey = "advanced-focus-mode.demo-kit-collapsed";
 
 const els = {
   sessionStatus: document.getElementById("session-status"),
@@ -52,6 +58,9 @@ const els = {
   modePreview: document.getElementById("mode-preview"),
   breakPreview: document.getElementById("break-preview"),
   sessionMode: document.getElementById("session-mode"),
+  modePicker: document.querySelector("[data-mode-picker]"),
+  modePickerButton: document.getElementById("mode-picker-button"),
+  modePickerMenu: document.getElementById("mode-picker-menu"),
   focusMinutes: document.getElementById("focus-minutes"),
   breakMinutes: document.getElementById("break-minutes"),
   sessionObjective: document.getElementById("session-objective"),
@@ -116,8 +125,20 @@ const els = {
   reviewNextAction: document.getElementById("review-next-action"),
   copyReport: document.getElementById("copy-report"),
   downloadReport: document.getElementById("download-report"),
-  paletteBackdrop: document.getElementById("palette-backdrop"),
-  paletteInput: document.getElementById("palette-input"),
+  loadDemoScenario: document.querySelector('[data-action="load-demo-scenario"]'),
+  startPresentation: document.querySelector('[data-action="start-presentation"]'),
+  copyDemoScript: document.querySelector('[data-action="copy-demo-script"]'),
+  presentationPrev: document.querySelector('[data-action="presentation-prev"]'),
+  presentationNext: document.querySelector('[data-action="presentation-next"]'),
+  presentationHud: document.getElementById("presentation-hud"),
+  presentationStepCount: document.getElementById("presentation-step-count"),
+  presentationStepTitle: document.getElementById("presentation-step-title"),
+    presentationStepCopy: document.getElementById("presentation-step-copy"),
+    demoKitBody: document.getElementById("demo-kit-body"),
+    demoKitSummary: document.getElementById("demo-kit-summary"),
+    demoKitToggle: document.querySelector('[data-action="toggle-demo-kit"]'),
+    paletteBackdrop: document.getElementById("palette-backdrop"),
+    paletteInput: document.getElementById("palette-input"),
   paletteList: document.getElementById("palette-list"),
   togglePause: document.querySelector('[data-action="toggle-pause"]'),
   completeSession: document.querySelector('[data-action="complete-session"]'),
@@ -138,9 +159,52 @@ const paletteActions = [
   { title: "Open clean tab", hint: "Launch a blank tab for distraction-free work.", action: "open-clean-tab" }
 ];
 
+const presentationSteps = [
+  {
+    title: "Load the demo scenario",
+    copy: "Preload the scenario so every key feature has a realistic state to show.",
+    target: '[data-presentation-target="demo"]'
+  },
+  {
+    title: "Open the command palette",
+    copy: "Use Ctrl+K to show the keyboard-first command surface.",
+    target: '[data-presentation-target="session"]'
+  },
+  {
+    title: "Show the task stack",
+    copy: "Add tasks, complete one, and show how the stack stays focused.",
+    target: '[data-presentation-target="tasks"]'
+  },
+  {
+    title: "Show recovery and parking",
+    copy: "Capture a context snapshot and park side thoughts instead of losing them.",
+    target: '[data-presentation-target="recovery"]'
+  },
+  {
+    title: "Show automation and budgets",
+    copy: "Demonstrate adaptive suggestions, project modes, and distraction budgets.",
+    target: '[data-presentation-target="autopilot"]'
+  },
+  {
+    title: "Show the report",
+    copy: "Copy the report so the audience sees the built-in wrap-up output.",
+    target: '[data-presentation-target="review"]'
+  },
+  {
+    title: "Export the state",
+    copy: "Export the state so the audience sees the built-in backup path.",
+    target: '[data-presentation-target="demo"]'
+  }
+];
+
 await init();
 
 async function init() {
+  state.presentationMode = loadPresentationMode();
+  state.presentationStep = loadPresentationStep();
+  state.demoKitCollapsed = loadDemoKitCollapsed();
+  syncPresentationMode();
+  syncDemoKitCollapsed();
   wireEvents();
   await refresh();
   globalThis.chrome?.storage?.onChanged?.addListener?.(handleStorageChange);
@@ -158,7 +222,6 @@ function wireEvents() {
   on(els.notificationsEnabled, "change", syncSettings);
   on(els.strictBlocking, "change", syncSettings);
   on(els.autoStartBreak, "change", syncSettings);
-  on(els.sessionMode, "change", renderSessionPreview);
   on(els.focusMinutes, "input", renderSessionPreview);
   on(els.breakMinutes, "input", renderSessionPreview);
   on(els.projectName, "input", queueProjectSave);
@@ -174,12 +237,16 @@ function wireEvents() {
   on(els.clearForensics, "click", clearForensics);
   on(els.parkingForm, "submit", onParkingSubmit);
   on(els.clearParking, "click", clearParkingLot);
+  on(els.modePickerButton, "click", toggleModePicker);
+  on(els.modePickerMenu, "click", onModePickerMenuClick);
   on(els.paletteBackdrop, "click", handlePaletteBackdropClick);
   on(els.paletteInput, "input", handlePaletteInput);
   on(els.paletteInput, "keydown", handlePaletteKeydown);
 
   document.addEventListener("click", handleClick);
   document.addEventListener("keydown", handleKeyboard);
+  document.addEventListener("click", handleModePickerDismiss);
+  document.addEventListener("keydown", handleModePickerKeys);
 }
 
 async function handleClick(event) {
@@ -268,6 +335,27 @@ async function handleAction(action) {
     case "copy-summary":
       await withStatus("Summary copied to clipboard.", () => copySummary());
       break;
+    case "load-demo-scenario":
+      await withStatus("Loading demo scenario...", () => loadDemoScenario());
+      break;
+    case "copy-demo-script":
+      await withStatus("Demo script copied.", () => copyDemoScript());
+      break;
+    case "toggle-demo-kit":
+      toggleDemoKit();
+      break;
+    case "start-presentation":
+      await withStatus("Starting presentation mode...", () => startPresentation());
+      break;
+    case "toggle-presentation-mode":
+      togglePresentationMode();
+      break;
+    case "presentation-prev":
+      movePresentationStep(-1);
+      break;
+    case "presentation-next":
+      movePresentationStep(1);
+      break;
     case "copy-report":
       await withStatus("Report copied to clipboard.", () => copyReport());
       break;
@@ -299,6 +387,34 @@ async function handleAction(action) {
 }
 
 async function handleKeyboard(event) {
+  if (state.presentationMode) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      togglePresentationMode(false);
+      return;
+    }
+    if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === "ArrowDown") {
+      event.preventDefault();
+      movePresentationStep(1);
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "PageUp" || event.key === "ArrowUp") {
+      event.preventDefault();
+      movePresentationStep(-1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      setPresentationStep(0);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      setPresentationStep(presentationSteps.length - 1);
+      return;
+    }
+  }
+
   if (event.target.matches("input, textarea, select")) {
     return;
   }
@@ -535,6 +651,7 @@ function renderSession(snapshot) {
   els.objectivePreview.textContent = session.objective?.trim() ? session.objective.trim() : "Nothing set yet";
   els.modePreview.textContent = session.modeLabel || prettyMode(session.mode || "deep-work");
   els.breakPreview.textContent = `${formatMinutes(session.breakMinutes || 10)} break`;
+  setModePickerValue(session.mode || "deep-work", { renderPreview: false });
   els.togglePause.textContent = session.phase === "paused" ? "Resume" : "Pause";
   els.completeSession.textContent = session.phase === "break" ? "End break" : "Finish round";
   els.skipBreak.hidden = session.phase !== "break";
@@ -698,6 +815,69 @@ function renderSessionPreview() {
   const mode = els.sessionMode.value || "deep-work";
   els.modePreview.textContent = prettyMode(mode);
   els.breakPreview.textContent = `${formatMinutes(Number(els.breakMinutes.value || 10))} break`;
+  syncModePickerMenu();
+}
+
+function setModePickerValue(mode, options = {}) {
+  const value = String(mode || "deep-work");
+  if (els.sessionMode) {
+    els.sessionMode.value = value;
+  }
+  if (els.modePickerButton) {
+    els.modePickerButton.textContent = prettyMode(value);
+  }
+  if (options.renderPreview !== false) {
+    els.modePreview.textContent = prettyMode(value);
+  }
+  syncModePickerMenu();
+}
+
+function syncModePickerMenu() {
+  if (!els.modePickerMenu) return;
+  const current = String(els.sessionMode?.value || "deep-work");
+  const options = Array.from(els.modePickerMenu.querySelectorAll("[data-mode-option]"));
+  options.forEach((option) => {
+    const selected = option.dataset.modeOption === current;
+    option.classList.toggle("is-selected", selected);
+    option.setAttribute("aria-selected", String(selected));
+  });
+  if (els.modePickerButton) {
+    els.modePickerButton.setAttribute("aria-expanded", String(Boolean(els.modePicker && !els.modePickerMenu.hidden)));
+  }
+}
+
+function toggleModePicker(forceOpen) {
+  if (!els.modePicker || !els.modePickerMenu) return;
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : els.modePickerMenu.hidden;
+  els.modePickerMenu.hidden = !shouldOpen;
+  els.modePicker.classList.toggle("is-open", shouldOpen);
+  if (els.modePickerButton) {
+    els.modePickerButton.setAttribute("aria-expanded", String(shouldOpen));
+  }
+}
+
+function closeModePicker() {
+  toggleModePicker(false);
+}
+
+function onModePickerMenuClick(event) {
+  const option = event.target.closest("[data-mode-option]");
+  if (!option) return;
+  setModePickerValue(option.dataset.modeOption);
+  closeModePicker();
+  renderSessionPreview();
+}
+
+function handleModePickerDismiss(event) {
+  if (!els.modePicker) return;
+  if (event.target.closest?.("[data-mode-picker]")) return;
+  closeModePicker();
+}
+
+function handleModePickerKeys(event) {
+  if (event.key === "Escape") {
+    closeModePicker();
+  }
 }
 
 function renderCoach(snapshot) {
@@ -929,6 +1109,307 @@ async function downloadReport() {
   anchor.download = report.filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+async function loadDemoScenario() {
+  const demoState = buildDemoState();
+  await command("state:import", { state: demoState });
+}
+
+async function startPresentation() {
+  await loadDemoScenario();
+  setPresentationStep(0);
+  togglePresentationMode(true);
+}
+
+async function copyDemoScript() {
+  const script = [
+    "Advanced Focus Mode demo script",
+    "",
+    "1. Click Load demo scenario.",
+    "2. Start presentation mode and use Next/Previous or the arrow keys.",
+    "3. Open the command palette with Ctrl+K.",
+    "4. Show Start session, Pause or resume, and Finish round.",
+    "5. Point out project context, the coach, and the review card.",
+    "6. Click Capture context and then Restore context.",
+    "7. Copy the report and export the state to show the final handoff.",
+    "",
+    "Tip: end by exporting the state so the audience sees backup support."
+  ].join("\n");
+
+  await navigator.clipboard.writeText(script);
+}
+
+function togglePresentationMode(forceValue) {
+  state.presentationMode = typeof forceValue === "boolean" ? forceValue : !state.presentationMode;
+  try {
+    localStorage.setItem(presentationModeKey, JSON.stringify(state.presentationMode));
+  } catch {
+    // Ignore storage failures in constrained browser contexts.
+  }
+  if (state.presentationMode) {
+    state.presentationStep = clampNumber(state.presentationStep, 0, presentationSteps.length - 1);
+    try {
+      localStorage.setItem(presentationStepKey, String(state.presentationStep));
+    } catch {
+      // Ignore storage failures in constrained browser contexts.
+    }
+  }
+  syncPresentationMode();
+  setActionStatus(state.presentationMode ? "Presentation mode on." : "Presentation mode off.");
+}
+
+function loadPresentationMode() {
+  try {
+    const raw = localStorage.getItem(presentationModeKey);
+    return raw ? JSON.parse(raw) === true : false;
+  } catch {
+    return false;
+  }
+}
+
+function loadPresentationStep() {
+  try {
+    const raw = localStorage.getItem(presentationStepKey);
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(presentationSteps.length - 1, Math.round(value)));
+  } catch {
+    return 0;
+  }
+}
+
+function syncPresentationMode() {
+  document.body.classList.toggle("presentation-mode", state.presentationMode);
+  if (els.presentationHud) {
+    els.presentationHud.hidden = !state.presentationMode;
+  }
+  renderPresentationMode();
+}
+
+function renderPresentationMode() {
+  const activeStep = presentationSteps[state.presentationStep] ?? presentationSteps[0];
+  const panels = Array.from(document.querySelectorAll("[data-presentation-target]"));
+  panels.forEach((panel) => {
+    panel.classList.remove("presentation-focus");
+  });
+
+  if (state.presentationMode) {
+    const target = document.querySelector(activeStep.target);
+    if (target) {
+      target.classList.add("presentation-focus");
+      target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    }
+  }
+
+  if (els.presentationStepCount) {
+    els.presentationStepCount.textContent = `Step ${state.presentationStep + 1} of ${presentationSteps.length}`;
+  }
+  if (els.presentationStepTitle) {
+    els.presentationStepTitle.textContent = activeStep.title;
+  }
+  if (els.presentationStepCopy) {
+    els.presentationStepCopy.textContent = activeStep.copy;
+  }
+  if (els.presentationPrev) {
+    els.presentationPrev.disabled = state.presentationStep <= 0;
+  }
+  if (els.presentationNext) {
+    els.presentationNext.disabled = state.presentationStep >= presentationSteps.length - 1;
+  }
+}
+
+function toggleDemoKit(forceValue) {
+  state.demoKitCollapsed = typeof forceValue === "boolean" ? forceValue : !state.demoKitCollapsed;
+  try {
+    localStorage.setItem(demoKitCollapsedKey, JSON.stringify(state.demoKitCollapsed));
+  } catch {
+    // Ignore storage failures in constrained browser contexts.
+  }
+  syncDemoKitCollapsed();
+}
+
+function loadDemoKitCollapsed() {
+  try {
+    const raw = localStorage.getItem(demoKitCollapsedKey);
+    return raw ? JSON.parse(raw) === true : false;
+  } catch {
+    return false;
+  }
+}
+
+function syncDemoKitCollapsed() {
+  if (els.demoKitBody) {
+    els.demoKitBody.hidden = state.demoKitCollapsed;
+  }
+  if (els.demoKitSummary) {
+    els.demoKitSummary.hidden = !state.demoKitCollapsed;
+  }
+  if (els.demoKitToggle) {
+    els.demoKitToggle.textContent = state.demoKitCollapsed ? "Expand" : "Collapse";
+    els.demoKitToggle.setAttribute("aria-expanded", String(!state.demoKitCollapsed));
+  }
+  document.querySelector(".demo-panel")?.classList.toggle("is-collapsed", state.demoKitCollapsed);
+}
+
+function setPresentationStep(index) {
+  const value = Math.max(0, Math.min(presentationSteps.length - 1, Math.round(index)));
+  state.presentationStep = value;
+  try {
+    localStorage.setItem(presentationStepKey, String(value));
+  } catch {
+    // Ignore storage failures in constrained browser contexts.
+  }
+  renderPresentationMode();
+}
+
+function movePresentationStep(delta) {
+  setPresentationStep(state.presentationStep + delta);
+}
+
+function buildDemoState() {
+  const snapshot = createDefaultState();
+  const now = new Date();
+  const focusMinutes = 45;
+  const breakMinutes = 10;
+
+  snapshot.settings = {
+    ...snapshot.settings,
+    notificationsEnabled: true,
+    strictBlocking: true,
+    autoStartBreak: false,
+    autopilotEnabled: true
+  };
+
+  snapshot.session = {
+    ...snapshot.session,
+    active: true,
+    phase: "focus",
+    pausedPhase: null,
+    mode: "plan",
+    modeId: "architecture",
+    modeLabel: "Architecture block",
+    projectName: "Advanced Focus Mode",
+    projectBranch: "feature/demo-tour",
+    projectTicket: "AFM-DEMO",
+    objective: "Show the extension workflow, recovery, and report flow.",
+    focusMinutes,
+    breakMinutes,
+    startedAt: new Date(now.getTime() - 12 * 60_000).toISOString(),
+    endsAt: new Date(now.getTime() + 33 * 60_000).toISOString(),
+    pausedAt: null,
+    remainingSeconds: 33 * 60,
+    pauseCount: 0,
+    recovery: {
+      capturedAt: new Date(now.getTime() - 2 * 60_000).toISOString(),
+      source: "demo-kit",
+      tabs: [
+        { title: "Repo architecture notes", url: "https://developer.chrome.com/docs/extensions/", pinned: false, active: false },
+        { title: "Implementation checklist", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript", pinned: false, active: false }
+      ]
+    },
+    lastObservedTab: {
+      url: "https://developer.chrome.com/docs/extensions/",
+      title: "Repo architecture notes",
+      observedAt: new Date(now.getTime() - 90 * 1000).toISOString()
+    }
+  };
+
+  snapshot.tasks = [
+    createTask("Show the command palette"),
+    createTask("Capture and restore the context"),
+    createTask("Copy the session report"),
+    createTask("Export the backup")
+  ];
+  snapshot.tasks[0].done = true;
+
+  snapshot.blocks = [
+    createBlock("youtube.com"),
+    createBlock("reddit.com"),
+    createBlock("x.com")
+  ];
+
+  snapshot.budgets = [
+    createBudgetRule("youtube.com", "Video budget", 2),
+    createBudgetRule("reddit.com", "Forum budget", 3)
+  ];
+  snapshot.budgets[0].used = 1;
+  snapshot.budgets[1].used = 2;
+
+  snapshot.parkingLot = [
+    createParkingItem({
+      title: "Follow-up note",
+      note: "Use this to show how stray thoughts stay captured instead of pulling focus."
+    }),
+    createParkingItem({
+      title: "Open question",
+      url: "https://developer.chrome.com/docs/extensions/mv3/",
+      kind: "tab",
+      note: "Demo parked link"
+    })
+  ];
+
+  snapshot.notes = "Demo note: explain the timer, the shield, the coach, and the report.";
+  snapshot.stats = {
+    ...snapshot.stats,
+    completedSessions: 18,
+    deepWorkMinutes: 870,
+    blockedAttempts: 6,
+    streakDays: 5,
+    lastCompletionDate: todayStamp(now)
+  };
+
+  addHistoryEntry(snapshot, {
+    type: "demo-loaded",
+    title: "Demo scenario loaded",
+    detail: "Preloaded state for a guided walkthrough."
+  });
+  addHistoryEntry(snapshot, {
+    type: "session-started",
+    title: "Focus session started",
+    detail: "Architecture block for the demo walkthrough.",
+    minutes: focusMinutes,
+    breakMinutes
+  });
+  addHistoryEntry(snapshot, {
+    type: "context-captured",
+    title: "Focus context captured",
+    detail: "Two demo tabs saved for restore."
+  });
+  addHistoryEntry(snapshot, {
+    type: "budget-added",
+    title: "Focus budget created",
+    detail: "Demo budgets applied to distraction-heavy sites."
+  });
+  addHistoryEntry(snapshot, {
+    type: "mode-applied",
+    title: "Project mode applied",
+    detail: "Architecture block tuned for the demo presentation."
+  });
+  addHistoryEntry(snapshot, {
+    type: "task-linked",
+    title: "Task linked to context",
+    detail: "Current demo task connected to the architecture notes."
+  });
+  addHistoryEntry(snapshot, {
+    type: "command-palette-opened",
+    title: "Command palette opened",
+    detail: "Keyboard-first command entry shown during the walkthrough."
+  });
+  addHistoryEntry(snapshot, {
+    type: "session-paused",
+    title: "Session paused",
+    detail: "Paused briefly to demonstrate recovery and resume."
+  });
+  addHistoryEntry(snapshot, {
+    type: "session-resumed",
+    title: "Session resumed",
+    detail: "Focus flow restored after the interruption."
+  });
+
+  return decorateSnapshot(snapshot);
 }
 
 async function exportState() {
