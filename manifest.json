@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Advanced Focus Mode for Developers",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Developer-grade focus mode with deep work sessions, distraction shielding, task stacking, notes, and session analytics.",
   "background": {
     "service_worker": "background.js",
